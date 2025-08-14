@@ -123,8 +123,8 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
             )}
 
             <TransformComponent
-              wrapperStyle={{width: '100%', height: '100%', flex: 1, overflow: 'visible'}}
-              contentStyle={{width: '100%', height: '100%', overflow: 'visible'}}
+              wrapperStyle={{width: '100%', height: '100%', flex: 1, overflow: 'visible', cursor: 'move'}}
+              contentStyle={{width: '100%', height: '100%', overflow: 'visible', cursor: 'move'}}
             >
               <div ref={containerRef}>
                 <MermaidBlock rawMermaidFileText={rawMermaidFileText}/>

@@ -36,6 +36,22 @@ function serializeSvgFrom(containerRef: React.RefObject<HTMLDivElement | null>) 
         if (v) (dstEl as Element).setAttribute(k, v);
       }
     });
+    // Ensure text remains visible in export: if computed text fill is none/transparent, use computed color
+    try {
+      const srcText = svg.querySelectorAll('text, tspan');
+      const dstText = clone.querySelectorAll('text, tspan');
+      const isNoneOrTransparent = (v: string | null) => !v || v === 'none' || /rgba\([^)]*,\s*0\s*\)/i.test(v) || v === 'transparent';
+      srcText.forEach((srcEl, i) => {
+        const dstEl = dstText[i] as Element | undefined;
+        if (!dstEl) return;
+        const cs = getComputedStyle(srcEl as Element);
+        const fill = cs.fill;
+        const color = cs.color;
+        if (isNoneOrTransparent(fill) && color) {
+          dstEl.setAttribute('fill', color);
+        }
+      });
+    } catch {}
   } catch {}
 
   // Best-effort: replace <foreignObject> labels with plain <text>
