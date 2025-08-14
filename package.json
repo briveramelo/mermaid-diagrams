@@ -17,9 +17,11 @@
   },
   "dependencies": {
     "@mermaid-js/layout-elk": "^0.1.8",
+    "jspdf": "^3.0.1",
     "mermaid": "^11.9.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-zoom-pan-pinch": "^3.7.0"
+    "react-zoom-pan-pinch": "^3.7.0",
+    "svg2pdf.js": "^2.5.0"
   }
 }

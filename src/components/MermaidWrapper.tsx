@@ -2,7 +2,7 @@ import React, {useRef, useState} from "react";
 import MermaidBlock from "@/components/MermaidBlock";
 import {TransformWrapper, TransformComponent} from "react-zoom-pan-pinch";
 import type {ReactZoomPanPinchRef, ReactZoomPanPinchContentRef} from "react-zoom-pan-pinch";
-import {downloadSvg} from "@/tools/downloader";
+import {downloadSvg, downloadPdf} from "@/tools/downloader";
 
 export interface MermaidWrapperProps {
   rawMermaidFileText: string;
@@ -16,6 +16,8 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
     minScale: 0.25,
     maxScale: 10,
     step: .3,
+    startX: 420,
+    startY: 15,
   })
   const [controlsVisible, setControlsVisible] = useState(true);
 
@@ -29,7 +31,8 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
       onInit={(ref) => setScale(ref.state.scale)}
       onTransformed={(ref, state) => setScale(state.scale)}
       limitToBounds={false}
-      centerOnInit={true}
+      initialPositionX={config.startX}
+      initialPositionY={config.startY}
     >
       {({zoomIn, zoomOut, resetTransform, setTransform}: ReactZoomPanPinchContentRef) => (
         <>
@@ -61,10 +64,10 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
               </div>
               <div style={{display: "flex", gap: 8, alignItems: "center", marginBottom: 12}}>
                 <button type="button" aria-label="Reset zoom" onClick={() => {
-                  resetTransform(200);
+                  resetTransform(100);
                   setTransform(
-                    420,
-                    15,
+                    config.startX,
+                    config.startY,
                     1,
                     100,
                     "easeInOutCubic"
@@ -92,6 +95,8 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
               </div>
               <div style={{display: "flex", gap: 8, alignItems: "left", marginBottom: 12}}>
                 <button type="button" onClick={() => downloadSvg(containerRef)} aria-label="Download SVG">Download SVG
+                </button>
+                <button type="button" onClick={() => downloadPdf(containerRef)} aria-label="Download PDF">Download PDF
                 </button>
               </div>
             </div>

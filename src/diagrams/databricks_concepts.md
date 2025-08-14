@@ -9,8 +9,8 @@ config:
     nodeSpacing: 24
     rankSpacing: 48
     curve: basis
-    htmlLabels: true
-    padding: 8
+    htmlLabels: false
+    padding: 0
 ---
 %% nodePlacementStrategy: LINEAR_SEGMENTS | SIMPLE | NETWORK_SIMPLEX | BRANDES_KOEPF
 %% cycleBreakingStrategy: GREEDY | DEPTH_FIRST | INTERACTIVE | MODEL_ORDER | GREEDY_MODEL_ORDER

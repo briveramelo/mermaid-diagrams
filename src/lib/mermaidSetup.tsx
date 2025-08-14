@@ -16,7 +16,7 @@ mermaid.initialize({
         curve: "basis",
         nodeSpacing: 24,
         rankSpacing: 64,
-        htmlLabels: true,
+        htmlLabels: false,
     },
     elk: {
         mergeEdges: false,
