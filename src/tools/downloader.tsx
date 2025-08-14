@@ -1,5 +1,6 @@
 import React from 'react'
 import jsPDF from 'jspdf'
+const svg2pdf = await import('svg2pdf.js');
 /**
  * Internal helper: clone & serialize the first <svg> found in the container.
  * Returns SVG XML and intrinsic width/height derived from the viewBox or attributes.
@@ -11,47 +12,30 @@ function serializeSvgFrom(containerRef: React.RefObject<HTMLDivElement | null>) 
   if (!svg) return null
 
   const clone = svg.cloneNode(true) as SVGSVGElement
-
-  // Inline computed styles so svg2pdf doesn't miss CSS-defined colors/fonts
-  try {
-    const srcNodes = svg.querySelectorAll('*');
-    const dstNodes = clone.querySelectorAll('*');
-    srcNodes.forEach((srcEl, i) => {
-      const dstEl = dstNodes[i] as Element | undefined;
-      if (!dstEl) return;
-      const cs = getComputedStyle(srcEl as Element);
-      const fill = cs.fill; if (fill) (dstEl as Element).setAttribute('fill', fill);
-      const stroke = cs.stroke; if (stroke) (dstEl as Element).setAttribute('stroke', stroke);
-      const sw = cs.strokeWidth; if (sw) (dstEl as Element).setAttribute('stroke-width', sw);
-      const fs = cs.fontSize; if (fs) (dstEl as Element).setAttribute('font-size', fs);
-      const ff = cs.fontFamily; if (ff) (dstEl as Element).setAttribute('font-family', ff);
-      const fw = cs.fontWeight; if (fw) (dstEl as Element).setAttribute('font-weight', fw);
-      const op = cs.opacity; if (op) (dstEl as Element).setAttribute('opacity', op);
-    });
-  } catch {}
-
   if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
   if (!clone.getAttribute('xmlns:xlink')) clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
 
-  const xml = new XMLSerializer().serializeToString(clone)
-
-  // Use geometry of actual drawn content to size/crop the export
+  // Compute tight bbox on the ORIGINAL svg (must be in DOM)
   let bbox = { x: 0, y: 0, width: 0, height: 0 };
   try {
-    // getBBox requires the element to be in the DOM; the original svg is.
     const b = (svg as any).getBBox?.();
     if (b && b.width && b.height) {
       bbox = { x: b.x, y: b.y, width: b.width, height: b.height };
     }
   } catch {}
 
-  // Fallback to viewBox if getBBox is unavailable
+  // Fallback to viewBox if needed
   if (!bbox.width || !bbox.height) {
-    const vb = clone.getAttribute('viewBox');
+    const vb = svg.getAttribute('viewBox') || clone.getAttribute('viewBox');
     if (vb) {
       const parts = vb.trim().split(/[ ,]+/);
       if (parts.length === 4) {
-        bbox = { x: Number(parts[0]) || 0, y: Number(parts[1]) || 0, width: Number(parts[2]) || 1, height: Number(parts[3]) || 1 };
+        bbox = {
+          x: Number(parts[0]) || 0,
+          y: Number(parts[1]) || 0,
+          width: Number(parts[2]) || 1,
+          height: Number(parts[3]) || 1,
+        };
       }
     }
   }
@@ -59,7 +43,34 @@ function serializeSvgFrom(containerRef: React.RefObject<HTMLDivElement | null>) 
   const width = Math.max(1, Math.round(bbox.width));
   const height = Math.max(1, Math.round(bbox.height));
 
-  return { xml, width, height, element: clone, offsetX: bbox.x, offsetY: bbox.y }
+  // Normalize the clone's coordinate system to [0,0,width,height]
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  while (clone.firstChild) g.appendChild(clone.firstChild);
+  g.setAttribute('transform', `translate(${-bbox.x}, ${-bbox.y})`);
+  clone.appendChild(g);
+  clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  clone.setAttribute('width', String(width));
+  clone.setAttribute('height', String(height));
+
+  // Inject background to match container bg (so light text stays visible on white PDF)
+  try {
+    const bgColor = getComputedStyle(root).backgroundColor;
+    const isTransparent = !bgColor || /rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/.test(bgColor) || bgColor === 'transparent';
+    if (!isTransparent) {
+      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bg.setAttribute('x', '0');
+      bg.setAttribute('y', '0');
+      bg.setAttribute('width', String(width));
+      bg.setAttribute('height', String(height));
+      bg.setAttribute('fill', bgColor);
+      clone.insertBefore(bg, clone.firstChild);
+    }
+  } catch {}
+
+  // Now serialize the adjusted clone
+  const xml = new XMLSerializer().serializeToString(clone);
+
+  return { xml, width, height, element: clone, offsetX: 0, offsetY: 0 };
 }
 
 /**
@@ -90,13 +101,13 @@ export const downloadPdf = async (
   const data = serializeSvgFrom(containerRef)
   if (!data) return
 
-  const { element, width, height, offsetX, offsetY } = data as any;
+  const { element, width, height } = data as any;
   const orientation = width >= height ? 'l' : 'p';
   const pdf = new jsPDF({ orientation, unit: 'pt', format: [width, height] });
 
   const mod = await import('svg2pdf.js');
   const svg2pdfFn: any = (mod as any).default ?? (mod as any).svg2pdf ?? (mod as any);
-  await svg2pdfFn(element as any, pdf as any, { xOffset: -offsetX || 0, yOffset: -offsetY || 0, scale: 1 });
+  await svg2pdfFn(element as any, pdf as any, { xOffset: 0, yOffset: 0, scale: 1 });
 
   pdf.save(options?.fileName ?? 'diagram.pdf')
 }
