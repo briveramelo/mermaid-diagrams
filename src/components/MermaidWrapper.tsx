@@ -34,13 +34,30 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
         <>
           {controlsVisible && (
             <div style={{position: 'fixed', top: 12, left: 12, display: 'flex', flexDirection: 'column', zIndex: 100}}>
-              <div style={{display: 'flex', flexDirection: 'row', alignItems:'center', verticalAlign: 'middle'}}>
-                <button type="button" onClick={() => setControlsVisible(false)} aria-label="Hide controls"
-                        title="Hide controls">×
-                </button>
-                <h1>Mermaid + ELK (React)</h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setControlsVisible(false)}
+                  aria-label="Hide controls"
+                  title="Hide controls"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 28,
+                    height: 28,
+                    padding: 0,
+                    lineHeight: 1,
+                    borderRadius: 6,
+                    border: '1px solid rgba(255,255,255,0.25)',
+                    background: 'rgba(0,0,0,0.4)',
+                    color: '#fff',
+                    cursor: 'pointer'
+                  }}
+                >×</button>
+                <h1 style={{ margin: 0, lineHeight: 1 }}>Mermaid + ELK (React)</h1>
               </div>
-              <div style={{display: "flex", gap: 8, alignItems: "left", marginBottom: 12}}>
+              <div style={{display: "flex", gap: 8, alignItems: "center", marginBottom: 12}}>
                 <div>{scale.toFixed(1)}</div>
                 <button type="button" onClick={() => zoomOut()} aria-label="Zoom out">−</button>
                 <input
@@ -59,6 +76,8 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
                 />
                 <button type="button" onClick={() => zoomIn()} aria-label="Zoom in">+</button>
                 <button type="button" onClick={() => resetTransform()} aria-label="Reset zoom">Reset</button>
+              </div>
+              <div style={{display: "flex", gap: 8, alignItems: "left", marginBottom: 12}}>
                 <button type="button" onClick={() => downloadSvg(containerRef)} aria-label="Download SVG">Download SVG
                 </button>
               </div>
