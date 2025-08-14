@@ -31,7 +31,9 @@ export default function MermaidBlock({ rawMermaidFileText, className }: MermaidB
     })();
   }, [rawMermaidFileText]);
 
-  return <pre className={`mermaid ${className || ""}`} ref={ref} />;
+  return (
+    <pre className={`mermaid ${className || ""}`} ref={ref} />
+  );
 }
 
 // Extract only the Mermaid diagram from Markdown. Supports ```mermaid fences,
