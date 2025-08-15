@@ -195,9 +195,8 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
             ref={formatterRef}
             containerRef={containerRef}
             layerCount={layerCount}
-            maxConfig={{ nodeFontSize: 24, nodePadding: 20, edgeStrokeWidth: 6 }}
-            minConfig={{ nodeFontSize: 12, nodePadding: 4, edgeStrokeWidth: 1 }}
-            scaleFactor={0.3}
+            maxConfig={{ nodeFontSize: 24, nodePadding: 20, edgeStrokeWidth: 6, boxScale: 1.25 }}
+            minConfig={{ nodeFontSize: 12, nodePadding: 4, edgeStrokeWidth: 1, boxScale: .75 }}
             colors={colors}
           />
         </>

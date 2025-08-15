@@ -4,6 +4,7 @@ type LayerConfig = {
   nodeFontSize: number;
   nodePadding: number;
   edgeStrokeWidth: number;
+  boxScale: number;
   layerScale: number;
   color: string;
 };
@@ -14,7 +15,6 @@ type MindMapFormatterProps = {
   minConfig: Omit<LayerConfig, 'layerScale' | 'color'>;
   maxConfig: Omit<LayerConfig, 'layerScale' | 'color'>;
   colors: string[]; // length should be >= layerCount
-  scaleFactor: number;
 };
 
 export type MindMapFormatterHandle = {
@@ -30,7 +30,6 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
       minConfig,
       maxConfig,
       colors,
-      scaleFactor = 0.3,
     },
     ref
   ) => {
@@ -102,7 +101,7 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
           maxConfig.nodeFontSize - depthRatio * (maxConfig.nodeFontSize - minConfig.nodeFontSize);
         const edgeStrokeWidth =
           maxConfig.edgeStrokeWidth - depthRatio * (maxConfig.edgeStrokeWidth - minConfig.edgeStrokeWidth);
-        const layerScale = 1 - depthRatio * scaleFactor;
+        const layerScale = maxConfig.boxScale - depthRatio * (maxConfig.boxScale - minConfig.boxScale);
 
         // Box/background styling: colorize shapes to match section color
         // and sync stroke width with depth. We keep a subtle fillOpacity so
@@ -130,37 +129,36 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
           (edge as SVGGraphicsElement).style.strokeWidth = `${edgeStrokeWidth}px`;
         });
 
-        // Align target to the anchor's center and scale around that center
+        // Align SHAPES to TEXT by centers, then scale around the TEXT center
         const applyCenteredScaleAligned = (target: Element | null, anchor: Element | null) => {
           if (!target || !anchor) return;
           const t = target as unknown as SVGGraphicsElement;
           const a = anchor as unknown as SVGGraphicsElement;
           if (!t.getBBox || !a.getBBox) return;
 
+          // Measure boxes in current user space (includes ancestor transforms)
           const tb = t.getBBox();
           const ab = a.getBBox();
-          const tcx = tb.x + tb.width / 2;
-          const tcy = tb.y + tb.height / 2;
           const acx = ab.x + ab.width / 2;
           const acy = ab.y + ab.height / 2;
 
-          // Translate so centers match
-          const dx = acx - tcx;
-          const dy = acy - tcy;
-
+          // Clean any prior formatter transforms to avoid accumulation
           const prev = t.getAttribute('transform') || '';
           const cleaned = prev
+            // remove our full T-S-T tripod if present
             .replace(/\s*translate\([^)]*\)\s*scale\([^)]*\)\s*translate\([^)]*\)/g, '')
-            .replace(/\s*translate\([^)]*\)/g, '')
+            // remove trailing single translates we might have added
+            .replace(/\s*translate\([^)]*\)\s*$/g, '')
+            // remove stray scales if any
             .replace(/\s*scale\([^)]*\)/g, '');
 
-          // Right-to-left application order ensures we first move by (dx,dy), then scale around the anchor center
-          t.setAttribute(
-            'transform',
-            `${cleaned} translate(${acx},${acy}) scale(${layerScale}) translate(${-acx},${-acy}) translate(${dx},${dy})`.trim()
-          );
+          // Compose: first align centers, then scale around the anchor's center
+          // Order matters: rightmost op applies first.
+          const centeredScale = `translate(${acx},${acy}) scale(${layerScale}) translate(${-acx},${-acy})`;
 
-          // Defensive CSS fallback for some renderers
+          t.setAttribute('transform', `${cleaned} ${centeredScale}`.trim());
+
+          // Defensive CSS hints (some renderers honor these for SVG groups)
           (t as any).style.transformOrigin = 'center';
           (t as any).style.transformBox = 'fill-box';
         };
@@ -183,7 +181,7 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
           applyCenteredScaleAligned(node, node);
         }
       });
-    }, [containerRef, layerCount, minConfig, maxConfig, colors, scaleFactor]);
+    }, [containerRef, layerCount, minConfig, maxConfig, colors]);
 
     // Expose an imperative handle so parents can refresh on demand
     useImperativeHandle(
