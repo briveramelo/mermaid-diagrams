@@ -9,19 +9,7 @@ export function downloadSvg(
   containerRef: React.RefObject<HTMLElement | null>,
   fileName = 'diagram.svg'
 ) {
-  const svg = containerRef.current?.querySelector('svg') as SVGSVGElement | null
-  if (!svg) return
-
-  const clone = svg.cloneNode(true) as SVGSVGElement
-  // Ensure the cloned SVG is standalone
-  if (!clone.getAttribute('xmlns')) {
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
-  }
-  if (!clone.getAttribute('xmlns:xlink')) {
-    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
-  }
-
-  const xml = new XMLSerializer().serializeToString(clone)
+  const xml = serializeSvg(containerRef)
   const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' })
   const url = URL.createObjectURL(blob)
 
@@ -32,4 +20,27 @@ export function downloadSvg(
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+export function serializeSvg(containerRef: React.RefObject<HTMLElement | null>): string{
+  const svg = getSvgNode(containerRef)
+  if(!svg) return ""
+
+  return new XMLSerializer().serializeToString(svg as SVGSVGElement)
+}
+
+export function getSvgNode(containerRef: React.RefObject<HTMLElement | null>): Node | null{
+  const svg = containerRef.current?.querySelector('svg') as Node | null
+  if (!svg) return null
+
+  const clone = svg.cloneNode(true)
+  // Ensure the cloned SVG is standalone
+  if (!clone.getAttribute('xmlns')) {
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  }
+  if (!clone.getAttribute('xmlns:xlink')) {
+    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+  }
+
+  return clone;
 }

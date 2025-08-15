@@ -1,51 +1,37 @@
-import jsPDF from "jspdf";
+import jsPDF from 'jspdf'
+import type React from 'react'
+import {getSvgNode, serializeSvg} from '@/tools/svgDownloader'
 
 /**
- * Export a DOM node to a tightly-sized PDF (no excess boundaries).
- * - Preserves text wrapping & relative font sizing
- * - Avoids cropping by sizing the page to the content
- * - Adds a small, configurable margin
+ * Export the first `<svg>` inside the given container to a vector PDF.
+ * Uses svg2pdf.js to preserve text and shapes without rasterization.
  */
-export async function downloadPDF(
-  node: HTMLElement | null,
-  filename = "export.pdf",
-  marginPt = 12
+export async function downloadPdf(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  fileName = 'diagram.pdf'
 ) {
-  if (!node) throw new Error("downloadPDF: missing node");
+  const data = getSvgNode(containerRef)
+  if (!data) throw new Error('downloadPdf: missing SVG root')
 
-  // Ensure fonts are ready so wrapping/metrics are stable
+  // Wait for fonts so measurements and wrapping are stable
   try {
-    if (document.fonts?.ready) await document.fonts.ready;
+    if (document.fonts?.ready) await document.fonts.ready
   } catch {}
 
-  // Measure the element in CSS pixels
-  const rect = node.getBoundingClientRect();
+  const pxToPt = 72 / 96
+  const widthPt = data.width * pxToPt
+  const heightPt = data.height * pxToPt
 
-  // Convert CSS px -> points (1pt = 1/72in, 1px = 1/96in)
-  const pxToPt = 72 / 96;
-  const pageWidthPt = Math.ceil(rect.width * pxToPt) + marginPt * 2;
-  const pageHeightPt = Math.ceil(rect.height * pxToPt) + marginPt * 2;
-
-  // Create a custom-sized PDF that fits the content + margin
   const doc = new jsPDF({
-    unit: "pt",
-    format: [pageWidthPt, pageHeightPt],
+    unit: 'pt',
+    format: [widthPt, heightPt],
     putOnlyUsedFonts: true,
     compress: true,
-  });
+  })
 
-  // Render HTML into the PDF at native scale
-  await doc.html(node, {
-    x: marginPt,
-    y: marginPt,
-    width: pageWidthPt - marginPt * 2,      // rendering width in pt
-    windowWidth: Math.ceil(rect.width),      // matches on-screen layout/wrap
-    html2canvas: {
-      scale: Math.min(2, window.devicePixelRatio || 2), // crisp, not bloated
-      useCORS: true,
-      backgroundColor: null,
-    },
-  });
+  // Lazy-load svg2pdf to keep bundle small and satisfy TypeScript
+  const {svg2pdf}: any = await import('svg2pdf.js')
+  svg2pdf(data.element, doc, {x: 0, y: 0, width: widthPt, height: heightPt})
 
-  doc.save(filename);
+  doc.save(fileName)
 }
