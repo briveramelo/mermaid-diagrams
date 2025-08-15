@@ -52,31 +52,132 @@ function serializeSvgFrom(containerRef: React.RefObject<HTMLDivElement | null>) 
         }
       });
     } catch {}
+
+    // Persist text alignment from CSS to attributes so svg2pdf honors it
+    try {
+      const srcText2 = svg.querySelectorAll('text, tspan');
+      const dstText2 = clone.querySelectorAll('text, tspan');
+      srcText2.forEach((srcEl, i) => {
+        const dstEl = dstText2[i] as Element | undefined;
+        if (!dstEl) return;
+        const cs: any = getComputedStyle(srcEl as Element);
+        const ta = cs.textAnchor || (srcEl as Element).getAttribute('text-anchor');
+        const db = cs.dominantBaseline || (srcEl as Element).getAttribute('dominant-baseline');
+        if (ta) dstEl.setAttribute('text-anchor', ta);
+        if (db) dstEl.setAttribute('dominant-baseline', db);
+      });
+    } catch {}
+
   } catch {}
 
-  // Best-effort: replace <foreignObject> labels with plain <text>
+  // Best-effort: replace <foreignObject> labels with centered <text>/<tspan> lines (word-wrapped)
   try {
     const fos = Array.from(svg.querySelectorAll('foreignObject'));
     const fosClone = Array.from(clone.querySelectorAll('foreignObject'));
+
+    // Helper to compute lines using canvas text metrics
+    const wrapToWidth = (text: string, maxWidth: number, font: string): string[] => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return [text];
+      ctx.font = font;
+      const words = text.replace(/\s+/g, ' ').trim().split(' ');
+      const lines: string[] = [];
+      let line = '';
+      for (const w of words) {
+        const test = line ? line + ' ' + w : w;
+        const width = ctx.measureText(test).width;
+        if (width <= maxWidth || !line) {
+          line = test;
+        } else {
+          lines.push(line);
+          line = w;
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
+    };
+
     fos.forEach((fo, idx) => {
       const foClone = fosClone[idx] as SVGForeignObjectElement | undefined;
-      const textStr = (fo as any).textContent?.trim();
-      if (!foClone || !textStr) return;
+      if (!foClone) return;
+
+      const rawHTML = (fo as any).innerHTML || '';
+      // Extract plain text (keep manual <br> as breaks)
+      const htmlForBreaks = rawHTML
+        .replace(/<br\s*\/?\s*>/gi, '\n')
+        .replace(/<\/(div|p|li|h[1-6])>/gi, '\n')
+        .replace(/<[^>]+>/g, '');
+      const textStr = (htmlForBreaks || (fo as any).textContent || '')
+        .replace(/\u00A0/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .trim();
+      if (!textStr) return;
+
+      // Geometry
       let bb: DOMRect | undefined;
       try { bb = (fo as any).getBBox?.(); } catch {}
-      const baseY = (bb?.y ?? Number(fo.getAttribute('y')) ?? 0) + (bb?.height ?? 16) * 0.75;
       const x = bb?.x ?? Number(fo.getAttribute('x')) ?? 0;
-      const y = baseY;
-      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      t.setAttribute('x', String(x));
-      t.setAttribute('y', String(y));
+      const y = bb?.y ?? Number(fo.getAttribute('y')) ?? 0;
+      const w = bb?.width ?? Number(fo.getAttribute('width')) ?? 0;
+      const h = bb?.height ?? Number(fo.getAttribute('height')) ?? 0;
+
+      // Typography
       const cs = getComputedStyle(fo as Element);
-      if (cs.fontFamily) t.setAttribute('font-family', cs.fontFamily);
-      if (cs.fontSize) t.setAttribute('font-size', cs.fontSize);
-      if (cs.fontWeight) t.setAttribute('font-weight', cs.fontWeight);
-      if (cs.color) t.setAttribute('fill', cs.color);
-      t.textContent = textStr;
-      foClone.parentNode?.replaceChild(t, foClone);
+      const fontSizePx = parseFloat(cs.fontSize || '14') || 14;
+      const lineHeight = (() => {
+        const lh = cs.lineHeight;
+        const n = parseFloat(lh || '0');
+        return !lh || lh === 'normal' || !isFinite(n) ? fontSizePx * 1.2 : n;
+      })();
+      const fontWeight = cs.fontWeight || 'normal';
+      const fontFamily = cs.fontFamily || 'sans-serif';
+      const fillColor = cs.color || '#111';
+      const font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
+
+      // Inspect inner label element for wrapping rules and alignment
+      let inner = fo.querySelector('*') as HTMLElement | null;
+      const csInner = inner ? getComputedStyle(inner) : (cs as CSSStyleDeclaration);
+      const whiteSpace = (csInner.whiteSpace || cs.whiteSpace || '').toLowerCase();
+      const textAlign = (csInner.textAlign || cs.textAlign || 'center').toLowerCase();
+      const wrapAllowed = !(whiteSpace.includes('nowrap') || whiteSpace === 'pre');
+
+      // Compute wrapped lines to the available width inside FO
+      const maxTextWidth = Math.max(1, Math.round(w || 0));
+      let lines: string[];
+      const explicit = textStr.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (!wrapAllowed) {
+        lines = explicit.length > 0 ? explicit : [textStr];
+      } else {
+        const toWrap = explicit.length > 1 ? explicit.join(' ') : textStr.replace(/\r?\n/g, ' ');
+        lines = wrapToWidth(toWrap, maxTextWidth, font);
+      }
+
+      // Center horizontally and vertically within the foreignObject bbox
+      const xCenter = x + maxTextWidth / 2;
+      const blockHeight = lines.length * lineHeight;
+      const yStart = y + Math.max(fontSizePx, (h || blockHeight) / 2 - blockHeight / 2 + fontSizePx * 0.8);
+
+      const ns = 'http://www.w3.org/2000/svg';
+      const text = document.createElementNS(ns, 'text');
+      const anchor = textAlign === 'center' ? 'middle' : textAlign === 'right' ? 'end' : 'start';
+      text.setAttribute('text-anchor', anchor);
+      text.setAttribute('font-family', fontFamily);
+      text.setAttribute('font-size', String(fontSizePx));
+      text.setAttribute('font-weight', fontWeight);
+      text.setAttribute('fill', fillColor);
+
+      lines.forEach((line, iLine) => {
+        const tspan = document.createElementNS(ns, 'tspan');
+        tspan.setAttribute('x', String(xCenter));
+        if (iLine === 0) tspan.setAttribute('y', String(yStart));
+        else tspan.setAttribute('dy', String(lineHeight));
+        tspan.textContent = line;
+        text.appendChild(tspan);
+      });
+
+      foClone.parentNode?.replaceChild(text, foClone);
     });
   } catch {}
 
