@@ -130,10 +130,58 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
           (edge as SVGGraphicsElement).style.strokeWidth = `${edgeStrokeWidth}px`;
         });
 
-        // Scale node (strip any prior scale() to avoid accumulation)
-        const prev = node.getAttribute('transform') || '';
-        const cleaned = prev.replace(/\s*scale\([^)]*\)/g, '');
-        node.setAttribute('transform', `${cleaned} scale(${layerScale})`.trim());
+        // Align target to the anchor's center and scale around that center
+        const applyCenteredScaleAligned = (target: Element | null, anchor: Element | null) => {
+          if (!target || !anchor) return;
+          const t = target as unknown as SVGGraphicsElement;
+          const a = anchor as unknown as SVGGraphicsElement;
+          if (!t.getBBox || !a.getBBox) return;
+
+          const tb = t.getBBox();
+          const ab = a.getBBox();
+          const tcx = tb.x + tb.width / 2;
+          const tcy = tb.y + tb.height / 2;
+          const acx = ab.x + ab.width / 2;
+          const acy = ab.y + ab.height / 2;
+
+          // Translate so centers match
+          const dx = acx - tcx;
+          const dy = acy - tcy;
+
+          const prev = t.getAttribute('transform') || '';
+          const cleaned = prev
+            .replace(/\s*translate\([^)]*\)\s*scale\([^)]*\)\s*translate\([^)]*\)/g, '')
+            .replace(/\s*translate\([^)]*\)/g, '')
+            .replace(/\s*scale\([^)]*\)/g, '');
+
+          // Right-to-left application order ensures we first move by (dx,dy), then scale around the anchor center
+          t.setAttribute(
+            'transform',
+            `${cleaned} translate(${acx},${acy}) scale(${layerScale}) translate(${-acx},${-acy}) translate(${dx},${dy})`.trim()
+          );
+
+          // Defensive CSS fallback for some renderers
+          (t as any).style.transformOrigin = 'center';
+          (t as any).style.transformBox = 'fill-box';
+        };
+
+        // Mermaid structure: <g.mindmap-node>
+        //   ├─ <g>  (shapes: rect/line/path)
+        //   └─ <g>  (text container: may contain <rect.background> + <text>)
+        const childGroups = Array.from(node.querySelectorAll(':scope > g')) as SVGGElement[];
+        const shapesGroup = childGroups[0] ?? null;
+        const textGroup = childGroups[1] ?? null;
+
+        // Prefer aligning+scaling the SHAPES group to the TEXT group's center
+        if (shapesGroup && textGroup) {
+          applyCenteredScaleAligned(shapesGroup, textGroup);
+        } else if (shapesGroup) {
+          // Fallback: align to its own center
+          applyCenteredScaleAligned(shapesGroup, shapesGroup);
+        } else {
+          // Last resort: scale the whole node to its own center
+          applyCenteredScaleAligned(node, node);
+        }
       });
     }, [containerRef, layerCount, minConfig, maxConfig, colors, scaleFactor]);
 
