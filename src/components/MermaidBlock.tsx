@@ -25,6 +25,7 @@ export default function MermaidBlock({ rawMermaidFileText, className }: MermaidB
         const { svg, bindFunctions } = await mermaid.render(id, mermaid_text);
         el.innerHTML = svg;
         bindFunctions?.(el);
+        tagMindmapNodesByDepth(el, mermaid_text);
       } catch (err) {
         console.error(err);
       }
@@ -79,27 +80,27 @@ function parseMindmapDepths(raw: string): number[] {
 function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
   const svg = container.querySelector('svg');
   if (!svg) return;
-  const gs = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
-  const rootIdx = gs.findIndex(g => g.classList.contains('section-root'));
-  const nodes = gs.filter((_, idx) => idx !== rootIdx);
+  const elms = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
+  const rootIdx = elms.findIndex(g => g.classList.contains('section-root'));
+  const nodes = elms.filter((_, idx) => idx !== rootIdx);
   const depths = parseMindmapDepths(raw);
   const n = Math.min(nodes.length, depths.length);
   let branch = -1;
-  const clean = (el: SVGGElement) => {
-    Array.from(el.classList).filter(c => /^mm-(depth|branch)-\d+$/.test(c))
-      .forEach(c => el.classList.remove(c));
-    delete (el as any).dataset.depth;
-    delete (el as any).dataset.branch;
+  const clean = (elm: SVGGElement) => {
+    Array.from(elm.classList).filter(c => /^mm-(depth|branch)-\d+$/.test(c))
+      .forEach(c => elm.classList.remove(c));
+    delete (elm as any).dataset.depth;
+    delete (elm as any).dataset.branch;
   };
   for (let k = 0; k < n; k++) {
-    const d = depths[k];
-    const g = nodes[k];
-    clean(g);
-    if (d === 1) branch += 1;
-    g.classList.add(`mm-depth-${d}`);
-    if (branch >= 0) g.classList.add(`mm-branch-${branch}`);
-    (g as any).dataset.depth = String(d);
-    if (branch >= 0) (g as any).dataset.branch = String(branch);
+    const depth = depths[k];
+    const node = nodes[k];
+    clean(node);
+    if (depth === 1) branch += 1;
+    node.classList.add(`mm-depth-${depth}`);
+    if (branch >= 0) node.classList.add(`mm-branch-${branch}`);
+    (node as any).dataset.depth = String(depth);
+    if (branch >= 0) (node as any).dataset.branch = String(branch);
   }
 }
 

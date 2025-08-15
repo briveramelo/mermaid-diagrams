@@ -33,7 +33,7 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
     const container = containerRef.current;
     if (!container) return;
 
-    const computeLayerCount = () => {
+    const computeDepthCount = () => {
       const svg = container.querySelector("svg");
       if (!svg) return;
       const level1Nodes = Array.from(
@@ -51,12 +51,12 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
     const svg = container.querySelector("svg");
     let observer: MutationObserver | null = null;
     if (svg) {
-      computeLayerCount();
+      computeDepthCount();
     } else {
       observer = new MutationObserver(() => {
         const svgEl = container.querySelector("svg");
         if (svgEl) {
-          computeLayerCount();
+          computeDepthCount();
           observer?.disconnect();
         }
       });
