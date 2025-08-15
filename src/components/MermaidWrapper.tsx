@@ -2,7 +2,8 @@ import React, {useRef, useState} from "react";
 import MermaidBlock from "@/components/MermaidBlock";
 import {TransformWrapper, TransformComponent} from "react-zoom-pan-pinch";
 import type {ReactZoomPanPinchRef, ReactZoomPanPinchContentRef} from "react-zoom-pan-pinch";
-import {downloadSvg, downloadPdf} from "@/tools/downloader";
+import {downloadPdf, downloadSvg} from "@/tools/svgDownloader";
+import {downloadPDF} from "@/tools/pdfDownloader";
 
 export interface MermaidWrapperProps {
   rawMermaidFileText: string;
@@ -18,6 +19,7 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
     step: .3,
     startX: 420,
     startY: 15,
+    animTime: 1,
   })
   const [controlsVisible, setControlsVisible] = useState(true);
 
@@ -64,19 +66,19 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
               </div>
               <div style={{display: "flex", gap: 8, alignItems: "center", marginBottom: 12}}>
                 <button type="button" aria-label="Reset zoom" onClick={() => {
-                  resetTransform(100);
+                  resetTransform(config.animTime);
                   setTransform(
                     config.startX,
                     config.startY,
                     1,
-                    100,
+                    config.animTime,
                     "easeInOutCubic"
                   );
                 }}
                 >
                   Reset
                 </button>
-                <button type="button" onClick={() => zoomOut()} aria-label="Zoom out">−</button>
+                <button type="button" onClick={() => zoomOut(config.step, config.animTime)} aria-label="Zoom out">−</button>
                 <input
                   type="range"
                   min={config.minScale}
@@ -91,7 +93,7 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
                   aria-label="Zoom level"
                   style={{width: 200}}
                 />
-                <button type="button" onClick={() => zoomIn()} aria-label="Zoom in">+</button>
+                <button type="button" onClick={() => zoomIn(config.step, config.animTime)} aria-label="Zoom in">+</button>
               </div>
               <div style={{display: "flex", gap: 8, alignItems: "left", marginBottom: 12}}>
                 <button type="button" onClick={() => downloadSvg(containerRef)} aria-label="Download SVG">Download SVG
