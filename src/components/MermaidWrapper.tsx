@@ -3,6 +3,7 @@ import MermaidBlock from "@/components/MermaidBlock";
 import {TransformWrapper, TransformComponent} from "react-zoom-pan-pinch";
 import type {ReactZoomPanPinchRef, ReactZoomPanPinchContentRef} from "react-zoom-pan-pinch";
 import {downloadSvg, downloadPdf} from "@/tools/downloader";
+import {MindMapFormatter} from "@/components/MindMapFormatter.tsx";
 
 export interface MermaidWrapperProps {
   rawMermaidFileText: string;
@@ -130,6 +131,25 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
                 <MermaidBlock rawMermaidFileText={rawMermaidFileText}/>
               </div>
             </TransformComponent>
+          <MindMapFormatter
+            containerRef={containerRef}
+            layerCount={10}
+            minConfig={{ nodeFontSize: 12, nodePadding: 4, edgeStrokeWidth: 1 }}
+            maxConfig={{ nodeFontSize: 24, nodePadding: 20, edgeStrokeWidth: 6 }}
+            scaleFactor={0.3}
+            colors={[
+              "#60a5fa",
+              "#22c55e",
+              "#f59e0b",
+              "#10b981",
+              "#a78bfa",
+              "#2dd4bf",
+              "#6366f1",
+              "#ec4899",
+              "#fbbf24",
+              "#94a3b8"
+            ]}
+          />
         </>
       )}
     </TransformWrapper>
