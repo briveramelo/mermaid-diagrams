@@ -56,35 +56,82 @@ function extractMermaid(input: string): string {
   return src;
 }
 
-// 1) Parse depths from Mermaid text (root = 0)
-function parseMindmapDepths(raw: string): number[] {
-  const lines = raw.split(/\r?\n/).map(l => l.replace(/\t/g, '  '));
-  const content = lines.filter(l => l.trim() && !/^%%/.test(l.trim()));
-  let i = 0;
-  if (/^mindmap\s*$/i.test(content[0]?.trim() ?? '')) i = 1;
-  if (i >= content.length) return [];
-  const rootIndent = (content[i].match(/^\s*/)?.[0].length ?? 0);
-  const depths: number[] = [];
-  for (let j = i; j < content.length; j++) {
-    const line = content[j];
-    const indent = (line.match(/^\s*/)?.[0].length ?? 0);
-    const rel = Math.max(0, indent - rootIndent);
-    const depth = Math.floor(rel / 2); // assumes 2 spaces per level
-    if (j === i) continue;            // skip the root line
-    depths.push(depth);
-  }
-  return depths;
+// Helpers for consistent label handling
+function normalizeLabel(s: string): string {
+  return (s || '').replace(/\s+/g, ' ').trim();
 }
 
-// 2) Tag rendered SVG nodes based on parsed depths
+// Extract a display label from a Mermaid mindmap source line.
+// Handles shapes like `root((Label))` and strips trailing class tags `:::class`.
+function extractLabelFromSource(rawLine: string): string {
+  const line = rawLine.replace(/:::.*$/, '').trim();
+  // root((Label)) / ((Label)) pattern
+  const m = line.match(/^(?:[^:(\[]+)?\s*\(\((.*?)\)\)\s*$/);
+  if (m) return normalizeLabel(m[1]);
+  return normalizeLabel(line);
+}
+
+// 1) Parse depths from Mermaid text, keyed by `{section}-{label}` (root = depth 0, but we skip tagging it)
+function parseMindmapDepths(raw: string): Map<string, number> {
+  const depthByKey = new Map<string, number>();
+
+  const lines = raw.split(/\r?\n/).map(l => l.replace(/\t/g, '  '));
+  const content = lines.filter(l => l.trim() && !/^%%/.test(l.trim()));
+
+  let i = 0;
+  if (/^mindmap\s*$/i.test(content[0]?.trim() ?? '')) i = 1;
+  if (i >= content.length) return depthByKey;
+
+  const rootIndent = (content[i].match(/^\s*/)?.[0].length ?? 0);
+
+  type StackItem = { depth: number; section: number };
+  const stack: StackItem[] = [];
+  let currentSection = -1;
+
+  for (let j = i; j < content.length; j++) {
+    const rawLine = content[j];
+    const indent = (rawLine.match(/^\s*/)?.[0].length ?? 0);
+    const rel = Math.max(0, indent - rootIndent);
+    const depth = Math.floor(rel / 2); // assumes 2 spaces per level
+    const label = extractLabelFromSource(rawLine);
+
+    // First content line after `mindmap` is the root (skip tagging it)
+    if (j === i) {
+      stack[0] = { depth: 0, section: -1 };
+      continue;
+    }
+
+    // Maintain ancestor stack up to this depth
+    if (stack.length > depth) stack.length = depth;
+
+    // Determine section: depth 1 defines a new section in source order
+    let section: number;
+    if (depth === 1) {
+      currentSection += 1;
+      section = currentSection;
+    } else {
+      section = stack[depth - 1]?.section ?? currentSection;
+    }
+
+    stack[depth] = { depth, section };
+
+    const key = `${section}-${normalizeLabel(label)}`;
+    depthByKey.set(key, depth);
+  }
+
+  return depthByKey;
+}
+
+// 2) Tag rendered SVG nodes based on parsed depths keyed by `{section}-{label}`
 function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
   const svg = container.querySelector('svg');
   if (!svg) return;
-  const elms = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
-  const rootIdx = elms.findIndex(g => g.classList.contains('section-root'));
-  const nodes = elms.filter((_, idx) => idx !== rootIdx);
-  const depths = parseMindmapDepths(raw);
-  const n = Math.min(nodes.length, depths.length);
+
+  const nodeEls = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
+  const rootIdx = nodeEls.findIndex(g => g.classList.contains('section-root'));
+  const nodes = nodeEls.filter((_, idx) => idx !== rootIdx);
+
+  const depthByKey = parseMindmapDepths(raw);
 
   const clean = (elm: SVGGElement) => {
     Array.from(elm.classList)
@@ -94,11 +141,26 @@ function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
     delete (elm as any).dataset.branch;
   };
 
-  for (let k = 0; k < n; k++) {
-    const depth = depths[k];
-    const node = nodes[k];
+  nodes.forEach((node) => {
+    const cls = node.getAttribute('class') || '';
+    const secMatch = cls.match(/section-(\d+)/);
+    if (!secMatch) return;
+    const section = parseInt(secMatch[1], 10);
+
+    // Extract the visible label text from the node
+    const label = normalizeLabel(
+      Array.from(node.querySelectorAll('text'))
+        .map(t => t.textContent || '')
+        .join(' ')
+    );
+
+    const key = `${section}-${label}`;
+    const depth = depthByKey.get(key);
+
     clean(node);
-    node.classList.add(`mm-depth-${depth}`);
-    (node as any).dataset.depth = String(depth);
-  }
+    if (depth != null) {
+      node.classList.add(`mm-depth-${depth}`);
+      (node as any).dataset.depth = String(depth);
+    }
+  });
 }
