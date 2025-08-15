@@ -76,28 +76,37 @@ function parseMindmapDepths(raw: string): Map<string, number> {
   const depthByKey = new Map<string, number>();
 
   const lines = raw.split(/\r?\n/).map(l => l.replace(/\t/g, '  '));
-  const content = lines.filter(l => l.trim() && !/^%%/.test(l.trim()));
 
-  let i = 0;
-  if (/^mindmap\s*$/i.test(content[0]?.trim() ?? '')) i = 1;
-  if (i >= content.length) return depthByKey;
+  // Find the `mindmap` keyword and start AFTER it
+  const mmIdx = lines.findIndex(l => /^\s*mindmap\s*$/i.test(l.trim()));
+  if (mmIdx === -1) return depthByKey;
 
-  const rootIndent = (content[i].match(/^\s*/)?.[0].length ?? 0);
+  // First non-empty, non-comment line after `mindmap` is the root
+  let start = mmIdx + 1;
+  while (start < lines.length && (!lines[start].trim() || /^%%/.test(lines[start].trim()))) start++;
+  if (start >= lines.length) return depthByKey;
 
-  type StackItem = { depth: number; section: number };
+  const rootIndent = (lines[start].match(/^\s*/)?.[0].length ?? 0);
+
+  type StackItem = { depth: number; section: number; label: string };
   const stack: StackItem[] = [];
   let currentSection = -1;
 
-  for (let j = i; j < content.length; j++) {
-    const rawLine = content[j];
+  for (let j = start; j < lines.length; j++) {
+    const rawLine = lines[j];
+    const trimmed = rawLine.trim();
+    if (!trimmed || /^%%/.test(trimmed)) continue;            // skip blanks and comments
+    if (trimmed === '---') continue;                          // ignore stray front-matter separators inside block
+
     const indent = (rawLine.match(/^\s*/)?.[0].length ?? 0);
     const rel = Math.max(0, indent - rootIndent);
     const depth = Math.floor(rel / 2); // assumes 2 spaces per level
+
     const label = extractLabelFromSource(rawLine);
 
-    // First content line after `mindmap` is the root (skip tagging it)
-    if (j === i) {
-      stack[0] = { depth: 0, section: -1 };
+    // First parsed line is the root (skip tagging it)
+    if (j === start) {
+      stack[0] = { depth: 0, section: -1, label };
       continue;
     }
 
@@ -113,7 +122,7 @@ function parseMindmapDepths(raw: string): Map<string, number> {
       section = stack[depth - 1]?.section ?? currentSection;
     }
 
-    stack[depth] = { depth, section };
+    stack[depth] = { depth, section, label };
 
     const key = `${section}-${normalizeLabel(label)}`;
     depthByKey.set(key, depth);
@@ -148,11 +157,29 @@ function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
     const section = parseInt(secMatch[1], 10);
 
     // Extract the visible label text from the node
-    const label = normalizeLabel(
-      Array.from(node.querySelectorAll('text'))
-        .map(t => t.textContent || '')
-        .join(' ')
-    );
+    let label = '';
+    const textEl = node.querySelector('text');
+    if (textEl) {
+      const allTspans = Array.from(textEl.querySelectorAll('tspan'));
+      // Prefer LEAF tspans (those without nested tspans) to avoid duplicates
+      let leafTspans = allTspans.filter(ts => !ts.querySelector('tspan')) as SVGTSpanElement[];
+      if (leafTspans.length === 0) {
+        // Fallback: use direct child tspans of <text>
+        leafTspans = Array.from(textEl.children).filter(
+          (el): el is SVGTSpanElement => el.tagName.toLowerCase() === 'tspan'
+        );
+      }
+      if (leafTspans.length > 0) {
+        label = leafTspans
+          .map(ts => (ts.textContent ?? '').trim())
+          .filter(s => s.length > 0)
+          .join(' ');
+      } else {
+        // Last resort: take the textContent of the <text> node
+        label = (textEl.textContent ?? '').trim();
+      }
+    }
+    label = normalizeLabel(label);
 
     const key = `${section}-${label}`;
     const depth = depthByKey.get(key);
