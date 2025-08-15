@@ -12,7 +12,6 @@ mermaid.initialize({
         fontSize: "14px",
     },
     flowchart: {
-        defaultRenderer: "elk",
         curve: "basis",
         nodeSpacing: 24,
         rankSpacing: 64,
