@@ -12,23 +12,11 @@ config:
       mindmapBranchSpacing: 1600
       mindmapLeafSpacing: 1300
       mindmapPadding: 2140
-  styles:
-    govern: { fill: "#60a5fa", stroke: "#60a5fa", color: "#fff" }
-    ingest: { fill: "#22c55e", stroke: "#22c55e", color: "#fff" }
-    store: { fill: "#f59e0b", stroke: "#f59e0b", color: "#fff" }
-    devops: { fill: "#10b981", stroke: "#10b981", color: "#fff" }
-    transform: { fill: "#a78bfa", stroke: "#a78bfa", color: "#fff" }
-    orchestrate: { fill: "#2dd4bf", stroke: "#2dd4bf", color: "#fff" }
-    query: { fill: "#6366f1", stroke: "#6366f1", color: "#fff" }
-    mlai: { fill: "#ec4899", stroke: "#ec4899", color: "#fff" }
-    visualize: { fill: "#fbbf24", stroke: "#fbbf24", color: "#000" }
-    share: { fill: "#94a3b8", stroke: "#94a3b8", color: "#fff" }
-    secure: { fill: "#ef4444", stroke: "#ef4444", color: "#fff" }
 ---
 
 mindmap
   root((Databricks Data Intelligence Platform))
-    📜 Governance:::govern
+    📜 Governance
       Unity Catalog
         Access Control
         Row Filters
@@ -37,7 +25,7 @@ mindmap
         Catalog Explorer
         Three-Level Namespace
         ABAC Policies
-    📥 Ingestion:::ingest
+    📥 Ingestion
       Lakeflow Connect
         Managed Connectors
           Salesforce Connector
@@ -56,7 +44,7 @@ mindmap
           UI Upload
       Change Data Capture
         Lakeflow Declarative Pipelines
-    💾 Storage:::store
+    💾 Storage
       Delta Lake
         Parquet Format
         Delta Log
@@ -65,7 +53,7 @@ mindmap
       Streaming Tables
       Materialized Views
       Volumes
-    🛠 DevOps:::devops
+    🛠 DevOps
       Databricks Workspace
       Notebooks
         Python
@@ -81,12 +69,12 @@ mindmap
         SDKs
         CLI
       Asset Bundles
-    🔄 Transformation:::transform
+    🔄 Transformation
       Lakeflow Declarative Pipelines
       Spark SQL
       Structured Streaming
       Expectations
-    ⏱ Orchestration:::orchestrate
+    ⏱ Orchestration
       Lakeflow Jobs
         Job Triggers
           Scheduled Trigger
@@ -95,14 +83,14 @@ mindmap
         Job Parameters
         Job Notifications
         System Tables
-    🔍 Querying:::query
+    🔍 Querying
       Databricks SQL
       SQL Warehouses
         Serverless Warehouse
         Pro Warehouse
         Classic Warehouse
       Photon Engine
-    🧠 ML & AI:::mlai
+    🧠 ML & AI
       MLflow
         Experiment Tracking
         Model Registry
@@ -117,15 +105,15 @@ mindmap
         Model Serving
         AI Gateway
         Lakehouse IQ
-    📊 Visualization:::visualize
+    📊 Visualization
       AI/BI Dashboards
       Partner BI Tools
       Genie - AI Assistant
-    🤝 Sharing:::share
+    🤝 Sharing
       Delta Sharing
       Clean Rooms
       Databricks Marketplace
-    🔒 Security & Observability:::secure
+    🔒 Security & Observability
       Audit Logs
       Network Policies
       Private Connectivity
