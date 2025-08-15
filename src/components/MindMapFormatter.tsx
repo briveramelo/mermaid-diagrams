@@ -36,14 +36,14 @@ export const MindMapFormatter: React.FC<MindMapFormatterProps> = (
       if (!svg) return;
 
       // Find top-level branch groups (levels)
-      const level1Nodes = Array.from(
-        svg.querySelectorAll<SVGGElement>('g[class*="node"]'),
-      )
-        .filter((g) => {
-          // Heuristic: top-level nodes often have a specific transform or small depth
-          return g.querySelector('text')?.getAttribute('text-anchor') === 'middle';
-        })
-        .slice(1); // skip the root node
+      const rootGroup = svg.querySelector<SVGGElement>('g[data-level="0"]');
+      const level1Nodes: SVGGElement[] = rootGroup
+        ? Array.from(rootGroup.children).filter(
+          (child): child is SVGGElement =>
+            child instanceof SVGGElement &&
+            child.getAttribute('data-level') === '1'
+        )
+        : [];
 
       const actualCount = Math.min(layerCount, level1Nodes.length);
       for (let i = 0; i < actualCount; i++) {
@@ -83,21 +83,24 @@ export const MindMapFormatter: React.FC<MindMapFormatterProps> = (
 
     const svg = containerRef.current.querySelector('svg');
     let observer: MutationObserver | null = null;
+    let rafId = 0;
 
+    const scheduleApply = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => applyFormatting());
+    };
+
+    // Try immediately (in case the SVG is already present)
     if (svg) {
       applyFormatting();
-    } else {
-      observer = new MutationObserver(() => {
-        const svgEl = containerRef.current?.querySelector('svg');
-        if (svgEl) {
-          applyFormatting();
-          observer?.disconnect();
-        }
-      });
-      observer.observe(containerRef.current, {childList: true, subtree: true});
     }
 
+    // Always observe for subsequent Mermaid DOM updates
+    observer = new MutationObserver(scheduleApply);
+    observer.observe(containerRef.current, {childList: true, subtree: true});
+
     return () => {
+      cancelAnimationFrame(rafId);
       observer?.disconnect();
     };
   }, [containerRef, layerCount, minConfig, maxConfig, colors, scaleFactor]);

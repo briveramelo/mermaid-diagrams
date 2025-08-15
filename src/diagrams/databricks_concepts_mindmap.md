@@ -4,14 +4,13 @@ config:
   theme: dark
   mindmap:
     useMaxWidth: true
+    branchSpacing: 40
+    leafSpacing: 20
+    padding: 16
   themeVariables:
-    lineColor: #9CA3AF
-    textColor: #E5E7EB
-    themeVariables:
-      fontSize: 16px
-      mindmapBranchSpacing: 1600
-      mindmapLeafSpacing: 1300
-      mindmapPadding: 2140
+    lineColor: "#9CA3AF"
+    textColor: "#E5E7EB"
+    fontSize: 16px
 ---
 
 mindmap

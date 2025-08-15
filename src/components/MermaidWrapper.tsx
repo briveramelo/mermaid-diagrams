@@ -1,4 +1,4 @@
-import React, {useRef, useState} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import MermaidBlock from "@/components/MermaidBlock";
 import {TransformWrapper, TransformComponent} from "react-zoom-pan-pinch";
 import type {ReactZoomPanPinchRef, ReactZoomPanPinchContentRef} from "react-zoom-pan-pinch";
@@ -13,6 +13,61 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<ReactZoomPanPinchRef | null>(null);
   const [scale, setScale] = useState(1);
+  const colors = [
+    "#60a5fa",
+    "#22c55e",
+    "#f59e0b",
+    "#10b981",
+    "#a78bfa",
+    "#2dd4bf",
+    "#6366f1",
+    "#ec4899",
+    "#fbbf24",
+    "#94a3b8",
+  ];
+  const [layerCount, setLayerCount] = useState(0);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const computeLayerCount = () => {
+      const svg = container.querySelector("svg");
+      if (!svg) return;
+      const level1Nodes = Array.from(
+        svg.querySelectorAll<SVGGElement>('g[class*="node"]'),
+      )
+        .filter(
+          (g) =>
+            g.querySelector("text")?.getAttribute("text-anchor") === "middle",
+        )
+        .slice(1); // skip root node
+      const count = level1Nodes.length;
+      if (colors.length < count) {
+        console.warn(
+          `Not enough colors: expected at least ${count}, but got ${colors.length}.`,
+        );
+      }
+      setLayerCount(Math.min(count, colors.length));
+    };
+
+    const svg = container.querySelector("svg");
+    let observer: MutationObserver | null = null;
+    if (svg) {
+      computeLayerCount();
+    } else {
+      observer = new MutationObserver(() => {
+        const svgEl = container.querySelector("svg");
+        if (svgEl) {
+          computeLayerCount();
+          observer?.disconnect();
+        }
+      });
+      observer.observe(container, {childList: true, subtree: true});
+    }
+
+    return () => observer?.disconnect();
+  }, [rawMermaidFileText, colors.length]);
   const [config, setConfig] = useState({
     minScale: 0.25,
     maxScale: 10,
@@ -133,22 +188,11 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
             </TransformComponent>
           <MindMapFormatter
             containerRef={containerRef}
-            layerCount={10}
-            minConfig={{ nodeFontSize: 12, nodePadding: 4, edgeStrokeWidth: 1 }}
+            layerCount={layerCount}
             maxConfig={{ nodeFontSize: 24, nodePadding: 20, edgeStrokeWidth: 6 }}
+            minConfig={{ nodeFontSize: 12, nodePadding: 4, edgeStrokeWidth: 1 }}
             scaleFactor={0.3}
-            colors={[
-              "#60a5fa",
-              "#22c55e",
-              "#f59e0b",
-              "#10b981",
-              "#a78bfa",
-              "#2dd4bf",
-              "#6366f1",
-              "#ec4899",
-              "#fbbf24",
-              "#94a3b8"
-            ]}
+            colors={colors}
           />
         </>
       )}
