@@ -1,4 +1,4 @@
-import React, {RefObject, useEffect} from 'react';
+import React, { RefObject, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
 
 type LayerConfig = {
   nodeFontSize: number;
@@ -17,20 +17,24 @@ type MindMapFormatterProps = {
   scaleFactor: number;
 };
 
-export const MindMapFormatter: React.FC<MindMapFormatterProps> = (
-  {
-    containerRef,
-    layerCount,
-    minConfig,
-    maxConfig,
-    colors,
-    scaleFactor = 0.3,
-  }
-) => {
-  useEffect(() => {
-    if (!containerRef.current) return;
+export type MindMapFormatterHandle = {
+  /** Manually re-apply the formatting rules to the current SVG */
+  refresh: () => void;
+};
 
-    const applyFormatting = () => {
+const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProps>(
+  (
+    {
+      containerRef,
+      layerCount,
+      minConfig,
+      maxConfig,
+      colors,
+      scaleFactor = 0.3,
+    },
+    ref
+  ) => {
+    const applyFormatting = useCallback(() => {
       if (!containerRef.current) return;
       const svg = containerRef.current.querySelector('svg');
       if (!svg) return;
@@ -39,10 +43,10 @@ export const MindMapFormatter: React.FC<MindMapFormatterProps> = (
       const rootGroup = svg.querySelector<SVGGElement>('g[data-level="0"]');
       const level1Nodes: SVGGElement[] = rootGroup
         ? Array.from(rootGroup.children).filter(
-          (child): child is SVGGElement =>
-            child instanceof SVGGElement &&
-            child.getAttribute('data-level') === '1'
-        )
+            (child): child is SVGGElement =>
+              child instanceof SVGGElement &&
+              child.getAttribute('data-level') === '1'
+          )
         : [];
 
       const actualCount = Math.min(layerCount, level1Nodes.length);
@@ -51,15 +55,9 @@ export const MindMapFormatter: React.FC<MindMapFormatterProps> = (
         const ratio = i / (actualCount - 1 || 1);
         const config: LayerConfig = {
           ...minConfig,
-          nodeFontSize:
-            minConfig.nodeFontSize +
-            ratio * (maxConfig.nodeFontSize - minConfig.nodeFontSize),
-          nodePadding:
-            minConfig.nodePadding +
-            ratio * (maxConfig.nodePadding - minConfig.nodePadding),
-          edgeStrokeWidth:
-            minConfig.edgeStrokeWidth +
-            ratio * (maxConfig.edgeStrokeWidth - minConfig.edgeStrokeWidth),
+          nodeFontSize: minConfig.nodeFontSize + ratio * (maxConfig.nodeFontSize - minConfig.nodeFontSize),
+          nodePadding: minConfig.nodePadding + ratio * (maxConfig.nodePadding - minConfig.nodePadding),
+          edgeStrokeWidth: minConfig.edgeStrokeWidth + ratio * (maxConfig.edgeStrokeWidth - minConfig.edgeStrokeWidth),
           layerScale: 1 - ratio * scaleFactor,
           color: colors[i],
         };
@@ -79,31 +77,48 @@ export const MindMapFormatter: React.FC<MindMapFormatterProps> = (
         const prev = nodeGroup.getAttribute('transform') || '';
         nodeGroup.setAttribute('transform', `${prev} scale(${config.layerScale})`);
       }
-    };
+    }, [containerRef, layerCount, minConfig, maxConfig, colors, scaleFactor]);
 
-    const svg = containerRef.current.querySelector('svg');
-    let observer: MutationObserver | null = null;
-    let rafId = 0;
+    // Expose an imperative handle so parents can refresh on demand
+    useImperativeHandle(
+      ref,
+      () => ({
+        refresh: () => applyFormatting(),
+      }),
+      [applyFormatting]
+    );
 
-    const scheduleApply = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => applyFormatting());
-    };
+    useEffect(() => {
+      if (!containerRef.current) return;
 
-    // Try immediately (in case the SVG is already present)
-    if (svg) {
-      applyFormatting();
-    }
+      let observer: MutationObserver | null = null;
+      let rafId = 0;
 
-    // Always observe for subsequent Mermaid DOM updates
-    observer = new MutationObserver(scheduleApply);
-    observer.observe(containerRef.current, {childList: true, subtree: true});
+      const scheduleApply = () => {
+        cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => applyFormatting());
+      };
 
-    return () => {
-      cancelAnimationFrame(rafId);
-      observer?.disconnect();
-    };
-  }, [containerRef, layerCount, minConfig, maxConfig, colors, scaleFactor]);
+      // Try immediately (in case the SVG is already present)
+      const svg = containerRef.current.querySelector('svg');
+      if (svg) {
+        applyFormatting();
+      }
 
-  return null;
-};
+      // Always observe for subsequent Mermaid DOM updates
+      observer = new MutationObserver(scheduleApply);
+      observer.observe(containerRef.current, { childList: true, subtree: true });
+
+      return () => {
+        cancelAnimationFrame(rafId);
+        observer?.disconnect();
+      };
+    }, [containerRef, applyFormatting]);
+
+    return null;
+  }
+);
+
+MindMapFormatter.displayName = 'MindMapFormatter';
+
+export { MindMapFormatter };

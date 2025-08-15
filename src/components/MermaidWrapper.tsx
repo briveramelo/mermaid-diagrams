@@ -3,7 +3,8 @@ import MermaidBlock from "@/components/MermaidBlock";
 import {TransformWrapper, TransformComponent} from "react-zoom-pan-pinch";
 import type {ReactZoomPanPinchRef, ReactZoomPanPinchContentRef} from "react-zoom-pan-pinch";
 import {downloadSvg, downloadPdf} from "@/tools/downloader";
-import {MindMapFormatter} from "@/components/MindMapFormatter.tsx";
+import { MindMapFormatter } from "@/components/MindMapFormatter.tsx";
+import type { MindMapFormatterHandle } from "@/components/MindMapFormatter.tsx";
 
 export interface MermaidWrapperProps {
   rawMermaidFileText: string;
@@ -12,6 +13,7 @@ export interface MermaidWrapperProps {
 export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<ReactZoomPanPinchRef | null>(null);
+  const formatterRef = useRef<MindMapFormatterHandle | null>(null);
   const [scale, setScale] = useState(1);
   const colors = [
     "#60a5fa",
@@ -35,13 +37,8 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
       const svg = container.querySelector("svg");
       if (!svg) return;
       const level1Nodes = Array.from(
-        svg.querySelectorAll<SVGGElement>('g[class*="node"]'),
+        svg.querySelectorAll<SVGGElement>('.mindmap-node.mm-depth-1'),
       )
-        .filter(
-          (g) =>
-            g.querySelector("text")?.getAttribute("text-anchor") === "middle",
-        )
-        .slice(1); // skip root node
       const count = level1Nodes.length;
       if (colors.length < count) {
         console.warn(
@@ -154,6 +151,14 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
                 </button>
                 <button type="button" onClick={() => downloadPdf(containerRef)} aria-label="Download PDF">Download PDF
                 </button>
+                <button
+                  type="button"
+                  onClick={() => formatterRef.current?.refresh()}
+                  aria-label="Refresh layout styles"
+                  title="Refresh layout styles"
+                >
+                  Refresh Styles
+                </button>
               </div>
             </div>
           )}
@@ -187,6 +192,7 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
               </div>
             </TransformComponent>
           <MindMapFormatter
+            ref={formatterRef}
             containerRef={containerRef}
             layerCount={layerCount}
             maxConfig={{ nodeFontSize: 24, nodePadding: 20, edgeStrokeWidth: 6 }}

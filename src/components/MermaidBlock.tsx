@@ -55,3 +55,51 @@ function extractMermaid(input: string): string {
   return src;
 }
 
+// 1) Parse depths from Mermaid text (root = 0)
+function parseMindmapDepths(raw: string): number[] {
+  const lines = raw.split(/\r?\n/).map(l => l.replace(/\t/g, '  '));
+  const content = lines.filter(l => l.trim() && !/^%%/.test(l.trim()));
+  let i = 0;
+  if (/^mindmap\s*$/i.test(content[0]?.trim() ?? '')) i = 1;
+  if (i >= content.length) return [];
+  const rootIndent = (content[i].match(/^\s*/)?.[0].length ?? 0);
+  const depths: number[] = [];
+  for (let j = i; j < content.length; j++) {
+    const line = content[j];
+    const indent = (line.match(/^\s*/)?.[0].length ?? 0);
+    const rel = Math.max(0, indent - rootIndent);
+    const depth = Math.floor(rel / 2); // assumes 2 spaces per level
+    if (j === i) continue;            // skip the root line
+    depths.push(depth);
+  }
+  return depths;
+}
+
+// 2) Tag rendered SVG nodes based on parsed depths
+function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
+  const svg = container.querySelector('svg');
+  if (!svg) return;
+  const gs = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
+  const rootIdx = gs.findIndex(g => g.classList.contains('section-root'));
+  const nodes = gs.filter((_, idx) => idx !== rootIdx);
+  const depths = parseMindmapDepths(raw);
+  const n = Math.min(nodes.length, depths.length);
+  let branch = -1;
+  const clean = (el: SVGGElement) => {
+    Array.from(el.classList).filter(c => /^mm-(depth|branch)-\d+$/.test(c))
+      .forEach(c => el.classList.remove(c));
+    delete (el as any).dataset.depth;
+    delete (el as any).dataset.branch;
+  };
+  for (let k = 0; k < n; k++) {
+    const d = depths[k];
+    const g = nodes[k];
+    clean(g);
+    if (d === 1) branch += 1;
+    g.classList.add(`mm-depth-${d}`);
+    if (branch >= 0) g.classList.add(`mm-branch-${branch}`);
+    (g as any).dataset.depth = String(d);
+    if (branch >= 0) (g as any).dataset.branch = String(branch);
+  }
+}
+
