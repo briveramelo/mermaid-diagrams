@@ -1,4 +1,4 @@
-import React, { RefObject, useEffect, useImperativeHandle, forwardRef, useCallback } from 'react';
+import React, {RefObject, useEffect, useImperativeHandle, forwardRef, useCallback} from 'react';
 
 type LayerConfig = {
   nodeFontSize: number;
@@ -104,6 +104,21 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
           maxConfig.edgeStrokeWidth - depthRatio * (maxConfig.edgeStrokeWidth - minConfig.edgeStrokeWidth);
         const layerScale = 1 - depthRatio * scaleFactor;
 
+        // Box/background styling: colorize shapes to match section color
+        // and sync stroke width with depth. We keep a subtle fillOpacity so
+        // text remains readable on dark/light themes.
+        const shapes = node.querySelectorAll<SVGGraphicsElement>('path, rect, polygon, circle, line');
+        const fillOpacity = Math.max(0, Math.min(1, 0.12 + (1 - depthRatio) * 0.08));
+        shapes.forEach((shape) => {
+          // Apply color to both fill and stroke so the node "box" matches the text color
+          shape.style.stroke = color ?? '';
+          shape.style.strokeWidth = `${edgeStrokeWidth}px`;
+
+          // Only set fill on closed shapes; lines won't pick up fill anyway
+          shape.style.fill = color ?? '';
+          shape.style.fillOpacity = `${fillOpacity}`;
+        });
+
         // Text styling
         node.querySelectorAll('text').forEach((txt) => {
           (txt as SVGTextElement).style.fill = color ?? '';
@@ -150,7 +165,7 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
 
       // Always observe for subsequent Mermaid DOM updates
       observer = new MutationObserver(scheduleApply);
-      observer.observe(containerRef.current, { childList: true, subtree: true });
+      observer.observe(containerRef.current, {childList: true, subtree: true});
 
       return () => {
         cancelAnimationFrame(rafId);
@@ -164,4 +179,4 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
 
 MindMapFormatter.displayName = 'MindMapFormatter';
 
-export { MindMapFormatter };
+export {MindMapFormatter};
