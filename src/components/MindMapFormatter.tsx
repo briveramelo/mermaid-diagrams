@@ -39,44 +39,87 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
       const svg = containerRef.current.querySelector('svg');
       if (!svg) return;
 
-      // Find top-level branch groups (levels)
-      const rootGroup = svg.querySelector<SVGGElement>('g[data-level="0"]');
-      const level1Nodes: SVGGElement[] = rootGroup
-        ? Array.from(rootGroup.children).filter(
-            (child): child is SVGGElement =>
-              child instanceof SVGGElement &&
-              child.getAttribute('data-level') === '1'
-          )
-        : [];
+      // Gather all nodes (flat list) excluding the root
+      const allNodeGroups = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
+      const nodes = allNodeGroups.filter(g => !g.classList.contains('section-root'));
+      if (nodes.length === 0) return;
 
-      const actualCount = Math.min(layerCount, level1Nodes.length);
+      // Build section ordering and map to color index using existing .section-N classes
+      const sectionRe = /^section-(\d+)$/;
+      const sectionNums: number[] = [];
+      nodes.forEach(n => {
+        const sc = Array.from(n.classList).find(c => sectionRe.test(c));
+        if (sc) {
+          const s = parseInt(sc.match(sectionRe)![1], 10);
+          if (!sectionNums.includes(s)) sectionNums.push(s);
+        }
+      });
+      sectionNums.sort((a, b) => a - b);
+
+      const sectionToColorIndex = new Map<number, number>();
+      const actualCount = Math.min(layerCount, sectionNums.length);
       for (let i = 0; i < actualCount; i++) {
-        const nodeGroup = level1Nodes[i];
-        const ratio = i / (actualCount - 1 || 1);
-        const config: LayerConfig = {
-          ...minConfig,
-          nodeFontSize: minConfig.nodeFontSize + ratio * (maxConfig.nodeFontSize - minConfig.nodeFontSize),
-          nodePadding: minConfig.nodePadding + ratio * (maxConfig.nodePadding - minConfig.nodePadding),
-          edgeStrokeWidth: minConfig.edgeStrokeWidth + ratio * (maxConfig.edgeStrokeWidth - minConfig.edgeStrokeWidth),
-          layerScale: 1 - ratio * scaleFactor,
-          color: colors[i],
-        };
-
-        // Apply styles to the subtree of this branch
-        nodeGroup.querySelectorAll('text').forEach((txt) => {
-          (txt as SVGTextElement).style.fill = config.color ?? '';
-          (txt as SVGTextElement).style.fontSize = `${config.nodeFontSize}px`;
-        });
-
-        nodeGroup.querySelectorAll('path, line').forEach((edge) => {
-          (edge as SVGGraphicsElement).style.stroke = config.color ?? '';
-          (edge as SVGGraphicsElement).style.strokeWidth = `${config.edgeStrokeWidth}px`;
-        });
-
-        // Apply transform scale to the entire branch
-        const prev = nodeGroup.getAttribute('transform') || '';
-        nodeGroup.setAttribute('transform', `${prev} scale(${config.layerScale})`);
+        sectionToColorIndex.set(sectionNums[i], i);
       }
+
+      // Helper: depth from data attribute or class
+      const getDepth = (g: SVGGElement) => {
+        const d = (g as any).dataset?.depth;
+        if (d != null) {
+          const v = parseInt(d as string, 10);
+          if (!Number.isNaN(v)) return v;
+        }
+        const cls = Array.from(g.classList).find(c => /^mm-depth-(\d+)$/.test(c));
+        if (cls) return parseInt(cls.split('-').pop()!, 10);
+        return 1; // default
+      };
+
+      const depths = nodes.map(getDepth);
+      const maxDepth = Math.max(1, ...depths);
+
+      // Style edges per section color (optional but useful for visual grouping)
+      sectionNums.slice(0, actualCount).forEach((secNum, idx) => {
+        const color = colors[idx];
+        svg
+          .querySelectorAll<SVGGraphicsElement>(`.mindmap-edges .section-${secNum} path, .mindmap-edges .section-${secNum} line`)
+          .forEach(edge => {
+            edge.style.stroke = color ?? '';
+          });
+      });
+
+      // Apply per-node styles based on SECTION (color) and DEPTH (size/scale)
+      nodes.forEach((node) => {
+        const sc = Array.from(node.classList).find(c => sectionRe.test(c));
+        if (!sc) return;
+        const secNum = parseInt(sc.match(sectionRe)![1], 10);
+        const colorIndex = sectionToColorIndex.get(secNum);
+        const color = colorIndex != null ? colors[colorIndex] : colors[secNum % colors.length];
+
+        const depth = getDepth(node);
+        const depthRatio = maxDepth <= 1 ? 0 : (depth - 1) / (maxDepth - 1); // 0 at depth 1, 1 at deepest
+
+        const nodeFontSize =
+          maxConfig.nodeFontSize - depthRatio * (maxConfig.nodeFontSize - minConfig.nodeFontSize);
+        const edgeStrokeWidth =
+          maxConfig.edgeStrokeWidth - depthRatio * (maxConfig.edgeStrokeWidth - minConfig.edgeStrokeWidth);
+        const layerScale = 1 - depthRatio * scaleFactor;
+
+        // Text styling
+        node.querySelectorAll('text').forEach((txt) => {
+          (txt as SVGTextElement).style.fill = color ?? '';
+          (txt as SVGTextElement).style.fontSize = `${nodeFontSize}px`;
+        });
+
+        // Optional: if shapes exist inside this node group, set stroke width to reflect depth
+        node.querySelectorAll('path, line').forEach((edge) => {
+          (edge as SVGGraphicsElement).style.strokeWidth = `${edgeStrokeWidth}px`;
+        });
+
+        // Scale node (strip any prior scale() to avoid accumulation)
+        const prev = node.getAttribute('transform') || '';
+        const cleaned = prev.replace(/\s*scale\([^)]*\)/g, '');
+        node.setAttribute('transform', `${cleaned} scale(${layerScale})`.trim());
+      });
     }, [containerRef, layerCount, minConfig, maxConfig, colors, scaleFactor]);
 
     // Expose an imperative handle so parents can refresh on demand

@@ -85,22 +85,20 @@ function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
   const nodes = elms.filter((_, idx) => idx !== rootIdx);
   const depths = parseMindmapDepths(raw);
   const n = Math.min(nodes.length, depths.length);
-  let branch = -1;
+
   const clean = (elm: SVGGElement) => {
-    Array.from(elm.classList).filter(c => /^mm-(depth|branch)-\d+$/.test(c))
+    Array.from(elm.classList)
+      .filter(c => /^mm-(depth|branch)-\d+$/.test(c))
       .forEach(c => elm.classList.remove(c));
     delete (elm as any).dataset.depth;
     delete (elm as any).dataset.branch;
   };
+
   for (let k = 0; k < n; k++) {
     const depth = depths[k];
     const node = nodes[k];
     clean(node);
-    if (depth === 1) branch += 1;
     node.classList.add(`mm-depth-${depth}`);
-    if (branch >= 0) node.classList.add(`mm-branch-${branch}`);
     (node as any).dataset.depth = String(depth);
-    if (branch >= 0) (node as any).dataset.branch = String(branch);
   }
 }
-
