@@ -3,7 +3,6 @@ flowchart LR
 A[Ingest] --> B[Store] --> C[Transform]
 
 %% Force connectors to right side for these nodes
-classDef east layoutOptions:'{"elk.portConstraints":"FIXED_SIDE","elk.port.side":"EAST"}';
 class A,B,C east;
 
 %% Example domain styling

@@ -216,38 +216,6 @@ export function replaceForeignObjectsWithText(srcSvg: SVGSVGElement, clone: SVGS
   } catch {}
 }
 
-export function computeTightBBox(svg: SVGSVGElement) {
-  try {
-    const targets = svg.querySelectorAll(
-      'path,rect,circle,ellipse,line,polyline,polygon,text,foreignObject'
-    )
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity
-    targets.forEach((el) => {
-      try {
-        const b = (el as any).getBBox?.()
-        if (b && b.width >= 0 && b.height >= 0) {
-          minX = Math.min(minX, b.x)
-          minY = Math.min(minY, b.y)
-          maxX = Math.max(maxX, b.x + b.width)
-          maxY = Math.max(maxY, b.y + b.height)
-        }
-      } catch {}
-    })
-    if (isFinite(minX) && isFinite(minY) && isFinite(maxX) && isFinite(maxY)) {
-      return {
-        x: minX,
-        y: minY,
-        width: Math.max(1, maxX - minX),
-        height: Math.max(1, maxY - minY),
-      }
-    }
-  } catch {}
-  return null
-}
-
 export function bboxFromViewBoxAttr(el: SVGSVGElement): { x: number; y: number; width: number; height: number } | null {
   const vb = el.getAttribute('viewBox')
   if (!vb) return null

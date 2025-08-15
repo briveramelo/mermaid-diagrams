@@ -1,6 +1,6 @@
 import {
   bboxFromViewBoxAttr,
-  cloneWithNamespaces, computeTightBBox,
+  cloneWithNamespaces,
   ensureTextVisibility,
   getRootAndSvg, injectBackgroundFromContainer,
   inlineComputedStyles, normalizeCoordinateSystem, persistTextAlignment,
@@ -25,16 +25,7 @@ export function serializeSvgFrom(
   // Replace foreignObject with SVG text
   replaceForeignObjectsWithText(svg, clone)
 
-  // Compute bbox; fallback to viewBox
-  let bbox = computeTightBBox(svg)
-  if (!bbox) {
-    bbox = bboxFromViewBoxAttr(svg) || bboxFromViewBoxAttr(clone)
-  }
-  if (!bbox) {
-    // ultimate fallback
-    bbox = { x: 0, y: 0, width: 1, height: 1 }
-  }
-
+  let bbox = svg.viewBox.baseVal
   const { width, height } = normalizeCoordinateSystem(clone, bbox)
   injectBackgroundFromContainer(root, clone, width, height)
 
