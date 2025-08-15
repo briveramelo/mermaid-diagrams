@@ -1,5 +1,4 @@
 import {
-  bboxFromViewBoxAttr,
   cloneWithNamespaces,
   ensureTextVisibility,
   getRootAndSvg, injectBackgroundFromContainer,
