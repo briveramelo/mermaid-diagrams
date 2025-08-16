@@ -68,8 +68,8 @@ export default function MermaidWrapper({rawMermaidFileText, onDrawIoXml}: Mermai
     minScale: 0.25,
     maxScale: 10,
     step: .3,
-    startX: 420,
-    startY: 15,
+    startX: 0,
+    startY: 0,
     drawIo: {
       scalingFactor: 2,
       shapeScaleFactor: 1,
@@ -204,8 +204,8 @@ export default function MermaidWrapper({rawMermaidFileText, onDrawIoXml}: Mermai
           <MindMapFormatter
             containerRef={containerRef}
             layerCount={layerCount}
-            maxConfig={{nodeFontSize: 24, nodePadding: 20, edgeStrokeWidth: 6, boxScale: 1.5}}
-            minConfig={{nodeFontSize: 12, nodePadding: 4, edgeStrokeWidth: 1, boxScale: .75}}
+            maxConfig={{nodeFontSize: 24, nodePadding: 20, edgeStrokeWidth: 6, boxScale: 1.5, rootNodeScale: 1.2}}
+            minConfig={{nodeFontSize: 12, nodePadding: 4, edgeStrokeWidth: 1, boxScale: .75, rootNodeScale: 1.2}}
             bucketConfig={
               {
                 buckets: [

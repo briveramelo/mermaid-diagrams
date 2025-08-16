@@ -117,6 +117,18 @@ export const applyCenteredScaleAligned = (target: Element | null, anchor: Elemen
 
 export const styleDiagram = (svg: SVGSVGElement, layerCount: number, colors: string[], min: LayerConfig, max: LayerConfig) => {
   const bgRGB = parseRGB(getComputedStyle((svg.parentElement as HTMLElement) || document.body).backgroundColor || '#0b1220') ?? [11, 18, 32];
+  const rootNode = svg.querySelector<SVGGElement>('.mindmap-nodes > g.mindmap-node.section-root');
+  if (rootNode) {
+    qs<SVGGraphicsElement>(rootNode, 'circle').forEach(circ => {
+      circ.setAttribute('transform', `scale(${max.rootNodeScale})`);
+    });
+    qs<SVGGraphicsElement>(rootNode, 'text, tspan').forEach(t => {
+      t.removeAttribute('font-size');
+      t.removeAttribute('font-weight');
+      t.style.fontSize = `${max.nodeFontSize * max.rootNodeScale}px`;
+      t.style.fontWeight = 'bold';
+    });
+  }
   const all = qs<SVGGElement>(svg, '.mindmap-nodes > g.mindmap-node').filter(g => !g.classList.contains('section-root'));
   if (!all.length) return;
   const sectionRe = /^section-(\d+)$/;
@@ -174,6 +186,8 @@ export const styleDiagram = (svg: SVGSVGElement, layerCount: number, colors: str
     const groups = qs<SVGGElement>(node, ':scope > g');
     const shapes = groups[0] ?? null;
     const text = groups[1] ?? null;
-    if (shapes && text) applyCenteredScaleAligned(shapes, text, layerScale); else if (shapes) applyCenteredScaleAligned(shapes, shapes, layerScale); else applyCenteredScaleAligned(node, node, layerScale);
+    if (shapes && text) applyCenteredScaleAligned(shapes, text, layerScale);
+    else if (shapes) applyCenteredScaleAligned(shapes, shapes, layerScale);
+    else applyCenteredScaleAligned(node, node, layerScale);
   });
 };
