@@ -63,67 +63,173 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
         const root = infos.find(i => i.id.startsWith('root-')) || infos.find(i => !i.parent);
         if (!root) return;
 
-        const elkGraph = {
-          id: 'mind-root',
-          layoutOptions: {
-            'elk.algorithm': 'layered',
-            // Sibling spacing along the same ring
-            'org.eclipse.elk.spacing.nodeNode': '28',
-            // Outer padding
-            'org.eclipse.elk.padding': '{top:16,left:16,bottom:16,right:16}',
-          },
-          children: infos.map(n => ({ id: n.id, width: Math.max(1, n.w), height: Math.max(1, n.h) })),
-          edges: infos
-            .filter(n => n.parent && !n.id.startsWith('root-'))
-            .map(n => ({ id: `${n.parent}->${n.id}` , sources: [n.parent!], targets: [n.id] })),
-        } as const;
+        // ---- PART 1: Count nodes per section and assign sections to directions evenly ----
+        const sections = Array.from(new Set(infos.map(i => i.section).filter((s): s is number => typeof s === 'number' && s >= 0)));
+        const sectionCounts = new Map<number, number>();
+        sections.forEach(s => sectionCounts.set(s, 0));
+        infos.forEach(i => {
+          if (typeof i.section === 'number' && i.section >= 0) {
+            sectionCounts.set(i.section, (sectionCounts.get(i.section) || 0) + 1);
+          }
+        });
 
-        const laidOut = await elk.layout(elkGraph as any);
-        const posById = new Map<string, { x: number; y: number; w: number; h: number }>();
-        for (const c of (laidOut.children || [])) {
-          posById.set(c.id, { x: c.x || 0, y: c.y || 0, w: c.width || 0, h: c.height || 0 });
+        type Bucket = { dir: 'RIGHT'|'LEFT'; total: number; sections: number[] };
+        const buckets: Bucket[] = [
+          { dir: 'RIGHT', total: 0, sections: [] },
+          { dir: 'LEFT',  total: 0, sections: [] },
+        ];
+
+        const sortedSections = sections.slice().sort((a, b) => (sectionCounts.get(b)! - sectionCounts.get(a)!));
+        for (const sec of sortedSections) {
+          // Greedy: always place next largest section into the bucket with the smallest total
+          buckets.sort((a, b) => a.total - b.total);
+          buckets[0].sections.push(sec);
+          buckets[0].total += sectionCounts.get(sec)!;
+        }
+        const sectionToDir = new Map<number, Bucket['dir']>();
+        buckets.forEach(b => b.sections.forEach(s => sectionToDir.set(s, b.dir)));
+
+        // ---- PART 2: Run layered layout per direction, filtered by the bucket's sections ----
+        const allPositions = new Map<string, { x: number; y: number; w: number; h: number }>();
+
+        const rootInfo = infos.find(i => i.id.startsWith('root-')) || infos.find(i => !i.parent);
+        const rootId = rootInfo?.id;
+
+        // We'll place the root after we compute the shared vertical midline
+        let rootTranslateX = 0;
+        let rootTranslateY = 0;
+
+        for (const bucket of buckets) {
+          const allowed = new Set(bucket.sections);
+          // Include root and every node whose section is in this bucket
+          const subInfos = infos.filter(i => (i.id === rootId) || (typeof i.section === 'number' && allowed.has(i.section)));
+          if (!subInfos.length) continue;
+
+          const idSet = new Set(subInfos.map(i => i.id));
+          const children = subInfos.map(n => ({ id: n.id, width: Math.max(1, n.w), height: Math.max(1, n.h) }));
+          const edges = subInfos
+            .filter(n => n.parent && idSet.has(n.parent) && n.id !== rootId)
+            .map(n => ({ id: `${n.parent}->${n.id}`, sources: [n.parent!], targets: [n.id] }));
+
+          const graph = {
+            id: `g-${bucket.dir}`,
+            layoutOptions: {
+              'elk.algorithm': 'layered',
+              'elk.direction': bucket.dir,
+              'spacing.nodeNodeBetweenLayers': '40',
+              'spacing.nodeNode': '28',
+              'org.eclipse.elk.padding': '{top:12,left:12,bottom:12,right:12}',
+            },
+            children,
+            edges,
+          } as const;
+
+          const laid = await elk.layout(graph as any);
+
+          // Align each sub-layout so its root sits at (0,0)
+          const rootChild = (laid.children || []).find(c => c.id === rootId);
+          const offX = rootChild ? - (rootChild.x || 0) : 0;
+          const offY = rootChild ? - (rootChild.y || 0) : 0;
+
+          // Collect positions for this bucket; compute local Y-extents
+          let minY = Number.POSITIVE_INFINITY;
+          let maxY = Number.NEGATIVE_INFINITY;
+          const posMap = new Map<string, { x: number; y: number; w: number; h: number }>();
+          for (const c of (laid.children || [])) {
+            if (c.id === rootId) continue; // don't include the root when computing extents
+            const x = (c.x || 0) + offX;
+            const y = (c.y || 0) + offY;
+            const w = c.width || 0;
+            const h = c.height || 0;
+            posMap.set(c.id, { x, y, w, h });
+            if (y < minY) minY = y;
+            if (y + h > maxY) maxY = y + h;
+          }
+          // Stash per-bucket positions & extents for later vertical alignment
+          (bucket as any).__posMap = posMap;
+          (bucket as any).__minY = isFinite(minY) ? minY : 0;
+          (bucket as any).__maxY = isFinite(maxY) ? maxY : 0;
         }
 
-        // Place nodes: override outer <g> transform with ELK coordinates
+        // --- Vertically center LEFT and RIGHT so they share the same Y midline ---
+        type BucketWithPos = Bucket & { __posMap?: Map<string, { x: number; y: number; w: number; h: number }>; __minY?: number; __maxY?: number };
+        const bucketsWithPos = buckets as unknown as BucketWithPos[];
+        const totalsForMid = bucketsWithPos.map(b => {
+          const map = b.__posMap || new Map();
+          const minY = b.__minY ?? 0;
+          const maxY = b.__maxY ?? 0;
+          const mid = (minY + maxY) / 2;
+          return { mid, count: map.size };
+        });
+        const totalCount = totalsForMid.reduce((s, t) => s + t.count, 0) || 1;
+        const weightedMid = totalsForMid.reduce((s, t) => s + (t.mid * t.count), 0) / totalCount;
+
+        // Position the root so its CENTER sits on the weighted midline (no global shift)
+        rootTranslateX = 0; // keep x as-is; only fix vertical elevation
+        rootTranslateY = weightedMid - ((rootInfo?.h || 0) / 2);
+
+        // Merge all positions, shifting each bucket by (weightedMid - itsMid)
+        bucketsWithPos.forEach(b => {
+          const map = b.__posMap || new Map();
+          const minY = b.__minY ?? 0;
+          const maxY = b.__maxY ?? 0;
+          const mid = (minY + maxY) / 2;
+          const dy = weightedMid - mid;
+          map.forEach((p, id) => {
+            allPositions.set(id, { x: p.x, y: p.y + dy, w: p.w, h: p.h });
+          });
+        });
+
+        // Place nodes using merged positions, applying root translate only to root node.
         infos.forEach(info => {
-          const p = posById.get(info.id);
-          if (!p) return;
-          // preserve original transform if needed
           const base = info.g.getAttribute('data-elk-base-transform') ?? (info.g.getAttribute('transform') || '');
           if (!info.g.hasAttribute('data-elk-base-transform')) {
             info.g.setAttribute('data-elk-base-transform', base);
           }
+          if (info.id === rootId) {
+            // Place the root at the computed vertical center (x as-is)
+            info.g.setAttribute('transform', `translate(${rootTranslateX},${rootTranslateY})`);
+            return;
+          }
+          const p = allPositions.get(info.id);
+          if (!p) return;
           info.g.setAttribute('transform', `translate(${p.x},${p.y})`);
         });
 
-        // Redraw edges to match ELK positions
+        // Redraw edges once, using merged positions; treat root as shifted only by rootTranslateX/Y
         const edgesGroup = svg.querySelector('.mindmap-edges');
         if (edgesGroup) {
           edgesGroup.innerHTML = '';
           const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
           g.setAttribute('class', 'elk-edges');
-          (laidOut.edges || []).forEach(e => {
-            const src = posById.get(e.sources[0]);
-            const tgt = posById.get(e.targets[0]);
-            if (!src || !tgt) return;
-            const x1 = src.x + src.w / 2;
-            const y1 = src.y + src.h / 2;
-            const x2 = tgt.x + tgt.w / 2;
-            const y2 = tgt.y + tgt.h / 2;
+
+          const posOr = (id: string) => {
+            if (id === rootId && rootInfo) return { x: rootTranslateX, y: rootTranslateY, w: rootInfo.w, h: rootInfo.h };
+            const p = allPositions.get(id);
+            return p ? { x: p.x, y: p.y, w: p.w, h: p.h } : undefined;
+          };
+
+          // Build full edge list from all infos
+          const fullEdges = infos.filter(n => n.parent && n.id !== rootId).map(n => ({ parent: n.parent!, id: n.id, section: n.section }));
+
+          fullEdges.forEach(e => {
+            const s = posOr(e.parent);
+            const t = posOr(e.id);
+            if (!s || !t) return;
+            const x1 = s.x + s.w / 2, y1 = s.y + s.h / 2;
+            const x2 = t.x + t.w / 2, y2 = t.y + t.h / 2;
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            // simple curved edge (quadratic)
-            const mx = (x1 + x2) / 2;
-            const my = (y1 + y2) / 2;
+            const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
             path.setAttribute('d', `M ${x1},${y1} Q ${mx},${my} ${x2},${y2}`);
-            // try to color by child section if available
-            const childInfo = infos.find(i => i.id === e.targets[0]);
-            if (childInfo?.section != null) path.setAttribute('class', `edge section-edge-${childInfo.section}`);
+            if (typeof e.section === 'number') path.setAttribute('class', `edge section-edge-${e.section}`);
             path.setAttribute('fill', 'none');
             path.setAttribute('stroke-width', '2');
             path.setAttribute('vector-effect', 'non-scaling-stroke');
             g.appendChild(path);
           });
+
           edgesGroup.appendChild(g);
+
           // --- Expand root SVG viewport to fit new layout (prevents cropping) ---
           try {
             const nodesRoot = svg.querySelector('.mindmap-nodes') as SVGGElement | null;
@@ -136,26 +242,17 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
               const minY = Math.min(...bboxes.map(b => b.y));
               const maxX = Math.max(...bboxes.map(b => b.x + b.width));
               const maxY = Math.max(...bboxes.map(b => b.y + b.height));
-              const pad = 48; // viewport padding
+              const pad = 32;
               const vbX = Math.floor(minX - pad);
               const vbY = Math.floor(minY - pad);
               const vbW = Math.ceil((maxX - minX) + 2 * pad);
               const vbH = Math.ceil((maxY - minY) + 2 * pad);
-
-              // Preserve original viewBox once for resets/debugging
               const baseVB = svg.getAttribute('viewBox') || '';
-              if (!svg.hasAttribute('data-mmf-base-viewBox') && baseVB) {
-                svg.setAttribute('data-mmf-base-viewBox', baseVB);
-              }
-
+              if (!svg.hasAttribute('data-mmf-base-viewBox') && baseVB) svg.setAttribute('data-mmf-base-viewBox', baseVB);
               svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
               svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
-              // Optional: make sure width/height do not force cropping; prefer responsive size
-              // If you want a flexible container, keep width/height as-is or set to 100% in CSS.
-              // Here we leave width/height untouched to avoid unintended layout shifts.
             }
-          } catch { /* ignore viewBox update errors */ }
+          } catch { /* ignore */ }
         }
       };
 
