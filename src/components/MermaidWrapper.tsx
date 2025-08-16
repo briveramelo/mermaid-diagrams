@@ -2,7 +2,7 @@ import React, {useEffect, useRef, useState} from "react";
 import MermaidBlock from "@/components/MermaidBlock";
 import {TransformWrapper, TransformComponent} from "react-zoom-pan-pinch";
 import type {ReactZoomPanPinchRef, ReactZoomPanPinchContentRef} from "react-zoom-pan-pinch";
-import {downloadSvg, downloadPdf} from "@/tools/downloader";
+import {downloadSvg, downloadPdf, downloadDrawIo} from "@/tools/downloader";
 import {MindMapFormatter} from "@/components/MindMapFormatter.tsx";
 
 export interface MermaidWrapperProps {
@@ -149,6 +149,7 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
                 </button>
                 <button type="button" onClick={() => downloadPdf(containerRef)} aria-label="Download PDF">Download PDF
                 </button>
+                <button type="button" onClick={() => downloadDrawIo(containerRef)} aria-label="Download draw.io">Download draw.io</button>
               </div>
             </div>
           )}
