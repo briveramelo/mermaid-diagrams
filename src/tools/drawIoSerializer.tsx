@@ -12,6 +12,38 @@ const escapeXml = (str: string) =>
 // Helpers for geometry + styles -------------------------------------------------
 const toNum = (n: number) => Number.isFinite(n) ? Number(n.toFixed(2)) : 0
 
+const getRootScale = (svg: SVGSVGElement, cssWidth: number, cssHeight: number) => {
+  const vb = svg.viewBox?.baseVal
+  const vbW = vb?.width || 0
+  const vbH = vb?.height || 0
+  const sx = vbW > 0 ? cssWidth / vbW : 1
+  const sy = vbH > 0 ? cssHeight / vbH : 1
+  return { sx, sy }
+}
+
+// Returns absolute bounding box in root SVG user units (before scaling to draw.io pixels)
+const getAbsoluteBBox = (el: SVGGraphicsElement) => {
+  // getBBox + CTM -> axis-aligned box in the root SVG coordinate space
+  const bbox = el.getBBox()
+  const ctm = el.getCTM()
+  if (!ctm) {
+    return { x: toNum(bbox.x), y: toNum(bbox.y), width: toNum(bbox.width), height: toNum(bbox.height) }
+  }
+  const points = [
+    new DOMPoint(bbox.x, bbox.y),
+    new DOMPoint(bbox.x + bbox.width, bbox.y),
+    new DOMPoint(bbox.x, bbox.y + bbox.height),
+    new DOMPoint(bbox.x + bbox.width, bbox.y + bbox.height),
+  ].map(p => p.matrixTransform(ctm))
+  const xs = points.map(p => p.x)
+  const ys = points.map(p => p.y)
+  const minX = Math.min(...xs)
+  const minY = Math.min(...ys)
+  const maxX = Math.max(...xs)
+  const maxY = Math.max(...ys)
+  return { x: toNum(minX), y: toNum(minY), width: toNum(maxX - minX), height: toNum(maxY - minY) }
+}
+
 const getComputedFillStroke = (
   el: Element,
 ): { fill: string; stroke: string; strokeWidth: string } => {
@@ -40,28 +72,6 @@ const getTextStyles = (
   const fontSize = (el.getAttribute("font-size") || (cs as any).fontSize || inline.fontSize || "16").toString()
   const fontColor = (el.getAttribute("fill") || (cs as any).fill || inline.fill || "#000000").toString()
   return { fontSize, fontColor }
-}
-
-const getAbsoluteBBox = (el: SVGGraphicsElement) => {
-  // getBBox + CTM -> axis-aligned box in the root SVG coordinate space
-  const bbox = el.getBBox()
-  const ctm = el.getCTM()
-  if (!ctm) {
-    return { x: toNum(bbox.x), y: toNum(bbox.y), width: toNum(bbox.width), height: toNum(bbox.height) }
-  }
-  const points = [
-    new DOMPoint(bbox.x, bbox.y),
-    new DOMPoint(bbox.x + bbox.width, bbox.y),
-    new DOMPoint(bbox.x, bbox.y + bbox.height),
-    new DOMPoint(bbox.x + bbox.width, bbox.y + bbox.height),
-  ].map(p => p.matrixTransform(ctm))
-  const xs = points.map(p => p.x)
-  const ys = points.map(p => p.y)
-  const minX = Math.min(...xs)
-  const minY = Math.min(...ys)
-  const maxX = Math.max(...xs)
-  const maxY = Math.max(...ys)
-  return { x: toNum(minX), y: toNum(minY), width: toNum(maxX - minX), height: toNum(maxY - minY) }
 }
 
 const textFrom = (root: Element): string => {
@@ -93,6 +103,8 @@ export const serializeDrawIoFrom = (
   const width = Number(data.width) || Number(svgEl.getAttribute("width") || 1000)
   const height = Number(data.height) || Number(svgEl.getAttribute("height") || 1000)
 
+  const { sx, sy } = getRootScale(svgEl, width, height)
+
   let id = 1
   const cells: string[] = ["<mxCell id=\"0\"/>", "<mxCell id=\"1\" parent=\"0\"/>"]
   const nodeInfos: { id: number; x: number; y: number; w: number; h: number }[] = []
@@ -104,7 +116,11 @@ export const serializeDrawIoFrom = (
     // Preferred background primitive to infer style (rect/path/circle)
     const bg = (g.querySelector(".node-bkg, rect.background, rect, circle, path") as SVGGraphicsElement) || group
     const { fill, stroke, strokeWidth } = getComputedFillStroke(bg as Element)
-    const { x, y, width: w, height: h } = getAbsoluteBBox(group)
+    const abs = getAbsoluteBBox(group)
+    const x = toNum(abs.x * sx)
+    const y = toNum(abs.y * sy)
+    const w = toNum(abs.width * sx)
+    const h = toNum(abs.height * sy)
     const label = textFrom(g)
 
     const textEl = g.querySelector("text") as SVGTextElement | null
@@ -134,12 +150,19 @@ export const serializeDrawIoFrom = (
     const path = p as unknown as SVGPathElement
     try {
       const total = path.getTotalLength()
-      const p0 = path.getPointAtLength(0)
-      const p1 = path.getPointAtLength(total)
+      const _p0 = path.getPointAtLength(0)
+      const _p1 = path.getPointAtLength(total)
+      const m = path.getCTM()
+      const q0 = m ? new DOMPoint(_p0.x, _p0.y).matrixTransform(m) : _p0
+      const q1 = m ? new DOMPoint(_p1.x, _p1.y).matrixTransform(m) : _p1
+      const ex0 = toNum(q0.x * sx)
+      const ey0 = toNum(q0.y * sy)
+      const ex1 = toNum(q1.x * sx)
+      const ey1 = toNum(q1.y * sy)
       const { stroke, strokeWidth } = getComputedFillStroke(path)
       const cellId = ++id
-      const sourceId = findNodeId(p0.x, p0.y)
-      const targetId = findNodeId(p1.x, p1.y)
+      const sourceId = findNodeId(ex0, ey0)
+      const targetId = findNodeId(ex1, ey1)
       const style = `edgeStyle=none;rounded=0;html=1;strokeColor=${stroke};strokeWidth=${parseFloat(strokeWidth)};` +
         `endArrow=none;startArrow=none;`
       if (sourceId && targetId) {
@@ -154,8 +177,8 @@ export const serializeDrawIoFrom = (
           `
 <mxCell id=\"${cellId}\" value=\"\" style=\"${style}\" edge=\"1\" parent=\"1\">
   <mxGeometry relative=\"1\" as=\"geometry\">
-    <mxPoint x=\"${toNum(p0.x)}\" y=\"${toNum(p0.y)}\" as=\"sourcePoint\"/>
-    <mxPoint x=\"${toNum(p1.x)}\" y=\"${toNum(p1.y)}\" as=\"targetPoint\"/>
+    <mxPoint x=\"${ex0}\" y=\"${ey0}\" as=\"sourcePoint\"/>
+    <mxPoint x=\"${ex1}\" y=\"${ey1}\" as=\"targetPoint\"/>
   </mxGeometry>
 </mxCell>`
         )
@@ -168,7 +191,7 @@ export const serializeDrawIoFrom = (
   const xml = `
 <mxfile host=\"mermaid\">
   <diagram name=\"Page-1\">
-    <mxGraphModel dx=\"${toNum(width)}\" dy=\"${toNum(height)}\" grid=\"1\" gridSize=\"10\" guides=\"1\" tooltips=\"0\" connect=\"1\" arrows=\"0\" fold=\"1\" page=\"1\" pageScale=\"1\" pageWidth=\"${toNum(width)}\" pageHeight=\"${toNum(height)}\" math=\"0\" shadow=\"0\">
+    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="0" connect="1" arrows="0" fold="1" page="1" pageScale="1" pageWidth=\"${toNum(width)}\" pageHeight=\"${toNum(height)}\" math=\"0\" shadow=\"0\">
       <root>${cells.join("")}</root>
     </mxGraphModel>
   </diagram>
