@@ -8,7 +8,7 @@ import simple_mind from "@/diagrams/simple_mindmap.md?raw";
 export default function App() {
   return (
     <div className="app">
-      <MermaidWrapper rawMermaidFileText={simple_mind} />
+      <MermaidWrapper rawMermaidFileText={db_mind} />
     </div>
   );
 }

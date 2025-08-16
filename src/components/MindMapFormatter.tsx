@@ -1,3 +1,6 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import ELK from 'elkjs/lib/elk.bundled.js';
 import React, {RefObject, useEffect, useImperativeHandle, forwardRef, useCallback} from 'react';
 
 type LayerConfig = {
@@ -33,10 +36,131 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
     },
     ref
   ) => {
-    const applyFormatting = useCallback(() => {
+    const applyFormatting = useCallback(async () => {
       if (!containerRef.current) return;
       const svg = containerRef.current.querySelector('svg');
       if (!svg) return;
+
+      // ===== ELK RADIAL LAYOUT (positions only; keep our styling) =====
+      const doElkLayout = async () => {
+        const elk = new ELK();
+        const allNodeGroups = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
+        if (allNodeGroups.length === 0) return;
+
+        // Build node/edge sets from data attributes tagged in MermaidBlock.tsx
+        type GInfo = { g: SVGGElement; id: string; parent?: string | null; section?: number; w: number; h: number };
+        const infos: GInfo[] = allNodeGroups.map(g => {
+          const bbox = (g as unknown as SVGGraphicsElement).getBBox();
+          const id = (g as any).dataset.mmId as string | undefined;
+          const parent = ((g as any).dataset.mmParent as string | undefined) ?? null;
+          const secMatch = Array.from(g.classList).find(c => /^section-(\d+)$/.test(c));
+          const section = secMatch ? parseInt(secMatch!.match(/^section-(\d+)$/)![1], 10) : undefined;
+          return { g, id: id || '', parent, section, w: bbox.width || 10, h: bbox.height || 10 };
+        }).filter(i => i.id);
+
+        if (!infos.length) return;
+
+        const root = infos.find(i => i.id.startsWith('root-')) || infos.find(i => !i.parent);
+        if (!root) return;
+
+        const elkGraph = {
+          id: 'mind-root',
+          layoutOptions: {
+            'elk.algorithm': 'layered',
+            // Sibling spacing along the same ring
+            'org.eclipse.elk.spacing.nodeNode': '28',
+            // Outer padding
+            'org.eclipse.elk.padding': '{top:16,left:16,bottom:16,right:16}',
+          },
+          children: infos.map(n => ({ id: n.id, width: Math.max(1, n.w), height: Math.max(1, n.h) })),
+          edges: infos
+            .filter(n => n.parent && !n.id.startsWith('root-'))
+            .map(n => ({ id: `${n.parent}->${n.id}` , sources: [n.parent!], targets: [n.id] })),
+        } as const;
+
+        const laidOut = await elk.layout(elkGraph as any);
+        const posById = new Map<string, { x: number; y: number; w: number; h: number }>();
+        for (const c of (laidOut.children || [])) {
+          posById.set(c.id, { x: c.x || 0, y: c.y || 0, w: c.width || 0, h: c.height || 0 });
+        }
+
+        // Place nodes: override outer <g> transform with ELK coordinates
+        infos.forEach(info => {
+          const p = posById.get(info.id);
+          if (!p) return;
+          // preserve original transform if needed
+          const base = info.g.getAttribute('data-elk-base-transform') ?? (info.g.getAttribute('transform') || '');
+          if (!info.g.hasAttribute('data-elk-base-transform')) {
+            info.g.setAttribute('data-elk-base-transform', base);
+          }
+          info.g.setAttribute('transform', `translate(${p.x},${p.y})`);
+        });
+
+        // Redraw edges to match ELK positions
+        const edgesGroup = svg.querySelector('.mindmap-edges');
+        if (edgesGroup) {
+          edgesGroup.innerHTML = '';
+          const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          g.setAttribute('class', 'elk-edges');
+          (laidOut.edges || []).forEach(e => {
+            const src = posById.get(e.sources[0]);
+            const tgt = posById.get(e.targets[0]);
+            if (!src || !tgt) return;
+            const x1 = src.x + src.w / 2;
+            const y1 = src.y + src.h / 2;
+            const x2 = tgt.x + tgt.w / 2;
+            const y2 = tgt.y + tgt.h / 2;
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            // simple curved edge (quadratic)
+            const mx = (x1 + x2) / 2;
+            const my = (y1 + y2) / 2;
+            path.setAttribute('d', `M ${x1},${y1} Q ${mx},${my} ${x2},${y2}`);
+            // try to color by child section if available
+            const childInfo = infos.find(i => i.id === e.targets[0]);
+            if (childInfo?.section != null) path.setAttribute('class', `edge section-edge-${childInfo.section}`);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('vector-effect', 'non-scaling-stroke');
+            g.appendChild(path);
+          });
+          edgesGroup.appendChild(g);
+          // --- Expand root SVG viewport to fit new layout (prevents cropping) ---
+          try {
+            const nodesRoot = svg.querySelector('.mindmap-nodes') as SVGGElement | null;
+            const elkEdges = svg.querySelector('.elk-edges') as SVGGElement | null;
+            const bboxes: { x: number; y: number; width: number; height: number }[] = [];
+            if (nodesRoot && (nodesRoot as any).getBBox) bboxes.push((nodesRoot as any).getBBox());
+            if (elkEdges && (elkEdges as any).getBBox) bboxes.push((elkEdges as any).getBBox());
+            if (bboxes.length) {
+              const minX = Math.min(...bboxes.map(b => b.x));
+              const minY = Math.min(...bboxes.map(b => b.y));
+              const maxX = Math.max(...bboxes.map(b => b.x + b.width));
+              const maxY = Math.max(...bboxes.map(b => b.y + b.height));
+              const pad = 48; // viewport padding
+              const vbX = Math.floor(minX - pad);
+              const vbY = Math.floor(minY - pad);
+              const vbW = Math.ceil((maxX - minX) + 2 * pad);
+              const vbH = Math.ceil((maxY - minY) + 2 * pad);
+
+              // Preserve original viewBox once for resets/debugging
+              const baseVB = svg.getAttribute('viewBox') || '';
+              if (!svg.hasAttribute('data-mmf-base-viewBox') && baseVB) {
+                svg.setAttribute('data-mmf-base-viewBox', baseVB);
+              }
+
+              svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+              svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+              // Optional: make sure width/height do not force cropping; prefer responsive size
+              // If you want a flexible container, keep width/height as-is or set to 100% in CSS.
+              // Here we leave width/height untouched to avoid unintended layout shifts.
+            }
+          } catch { /* ignore viewBox update errors */ }
+        }
+      };
+
+      // Run ELK layout once before styling; ignore errors to keep UI resilient
+      try { await doElkLayout(); } catch (e) { /* noop */ }
 
       // --- Color helpers for stroke-aware opaque fills that mimic transparency ---
       const parseRGB = (str: string): [number, number, number] | null => {
@@ -147,7 +271,7 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
         const desiredAlpha = Math.max(0, Math.min(1, 0.12 + (1 - depthRatio) * 0.08));
 
         // Convert the section color to RGB; if parsing fails, fall back to using the raw color string
-        const fgRGB = color ? parseRGB(color) : null;
+      const fgRGB = color ? parseRGB(color) : null;
         const blendedFill = fgRGB ? toRGBString(blendOver(fgRGB, bgRGB, desiredAlpha)) : (color ?? '');
 
         shapes.forEach((shape) => {

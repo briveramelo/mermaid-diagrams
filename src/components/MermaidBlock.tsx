@@ -26,6 +26,7 @@ export default function MermaidBlock({ rawMermaidFileText, className }: MermaidB
         el.innerHTML = svg;
         bindFunctions?.(el);
         tagMindmapNodesByDepth(el, mermaid_text);
+        tagMindmapTree(el, mermaid_text);
       } catch (err) {
         console.error(err);
       }
@@ -189,5 +190,116 @@ function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
       node.classList.add(`mm-depth-${depth}`);
       (node as any).dataset.depth = String(depth);
     }
+  });
+}
+
+
+// --- ELK helpers for mindmap tree tagging ---
+type MMItem = { key: string; label: string; section: number; depth: number; parentKey: string | null };
+
+// Parse the Mermaid mindmap into a simple tree with stable keys and parents
+function parseMindmapTree(raw: string): MMItem[] {
+  const items: MMItem[] = [];
+  const lines = raw.split(/\r?\n/).map(l => l.replace(/\t/g, '  '));
+  const mmIdx = lines.findIndex(l => /^\s*mindmap\s*$/i.test(l.trim()));
+  if (mmIdx === -1) return items;
+  let start = mmIdx + 1;
+  while (start < lines.length && (!lines[start].trim() || /^%%/.test(lines[start].trim()))) start++;
+  if (start >= lines.length) return items;
+
+  const rootIndent = (lines[start].match(/^\s*/)?.[0].length ?? 0);
+
+  type StackItem = { depth: number; section: number; key: string };
+  const stack: StackItem[] = [];
+  let currentSection = -1;
+
+  for (let j = start; j < lines.length; j++) {
+    const rawLine = lines[j];
+    const trimmed = rawLine.trim();
+    if (!trimmed || /^%%/.test(trimmed)) continue;
+    if (trimmed === '---') continue;
+
+    const indent = (rawLine.match(/^\s*/)?.[0].length ?? 0);
+    const rel = Math.max(0, indent - rootIndent);
+    const depth = Math.floor(rel / 2);
+
+    const label = extractLabelFromSource(rawLine);
+
+    if (j === start) {
+      const key = `root-${normalizeLabel(label)}`;
+      items.push({ key, label: normalizeLabel(label), section: -1, depth: 0, parentKey: null });
+      stack[0] = { depth: 0, section: -1, key };
+      continue;
+    }
+
+    if (stack.length > depth) stack.length = depth;
+
+    let section: number;
+    if (depth === 1) {
+      currentSection += 1;
+      section = currentSection;
+    } else {
+      section = stack[depth - 1]?.section ?? currentSection;
+    }
+
+    const parentKey = depth === 0 ? null : stack[depth - 1]?.key ?? `root-${normalizeLabel(items[0]?.label ?? '')}`;
+    const key = `${section}-${normalizeLabel(label)}`;
+
+    items.push({ key, label: normalizeLabel(label), section, depth, parentKey: parentKey ?? null });
+    stack[depth] = { depth, section, key };
+  }
+
+  return items;
+}
+
+// After rendering, tag each DOM node with a stable id and parent id for ELK
+function tagMindmapTree(container: HTMLElement, raw: string) {
+  const svg = container.querySelector('svg');
+  if (!svg) return;
+
+  const items = parseMindmapTree(raw);
+  if (!items.length) return;
+
+  const itemByKey = new Map(items.map(i => [i.key, i] as const));
+
+  // Helper to extract the visible label text from a node group
+  const labelFromNode = (g: SVGGElement): string => {
+    const textEl = g.querySelector('text');
+    if (textEl) {
+      const allTspans = Array.from(textEl.querySelectorAll('tspan')) as SVGTSpanElement[];
+      const leaf = allTspans.filter(ts => !ts.querySelector('tspan'));
+      const parts = (leaf.length ? leaf : allTspans).map(ts => (ts.textContent ?? '').trim()).filter(Boolean);
+      if (parts.length) return normalizeLabel(parts.join(' '));
+      const tc = (textEl.textContent ?? '').trim();
+      if (tc) return normalizeLabel(tc);
+    }
+    return '';
+  };
+
+  // Tag root first
+  const rootGroup = svg.querySelector<SVGGElement>('.mindmap-nodes > g.mindmap-node.section-root');
+  if (rootGroup) {
+    const rootLabel = labelFromNode(rootGroup);
+    const rootKey = `root-${rootLabel}`;
+    (rootGroup as any).dataset.mmId = rootKey;
+    (rootGroup as any).dataset.mmParent = '';
+    (rootGroup as any).dataset.depth = '0';
+  }
+
+  // Tag non-root nodes
+  const allNodeGroups = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
+  const nodes = allNodeGroups.filter(g => !g.classList.contains('section-root'));
+  const sectionRe = /^section-(\d+)$/;
+
+  nodes.forEach((node) => {
+    const secClass = Array.from(node.classList).find(c => sectionRe.test(c));
+    const section = secClass ? parseInt(secClass.match(sectionRe)![1], 10) : 0;
+    const label = labelFromNode(node);
+    const key = `${section}-${label}`;
+    const item = itemByKey.get(key);
+    if (!item) return;
+    (node as any).dataset.mmId = key;
+    (node as any).dataset.mmParent = item.parentKey ?? '';
+    (node as any).dataset.depth = String(item.depth);
   });
 }

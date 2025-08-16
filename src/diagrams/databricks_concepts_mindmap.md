@@ -3,9 +3,9 @@
 config:
   theme: dark
   mindmap:
-    useMaxWidth: true
-    branchSpacing: 40
-    leafSpacing: 20
+    useMaxWidth: false
+    branchSpacing: 880
+    leafSpacing: 820
     padding: 16
   themeVariables:
     lineColor: "#9CA3AF"
