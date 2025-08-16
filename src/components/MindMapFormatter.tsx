@@ -1,7 +1,7 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 import ELK from 'elkjs/lib/elk.bundled.js';
 import React, {RefObject, useEffect, useImperativeHandle, forwardRef, useCallback} from 'react';
+import {bbox, by, qs, toLocal, toScreen, updateViewBox} from "@/tools/svgHelpers.tsx";
+import {parseRGB, blend, toRGB} from "@/tools/colorHelpers.tsx";
 
 // ---------- Types ----------
 type LayerConfig = { nodeFontSize: number; nodePadding: number; edgeStrokeWidth: number; boxScale: number; };
@@ -15,48 +15,6 @@ export type MindMapFormatterProps = {
 };
 
 type GInfo = { g: SVGGElement; id: string; parent?: string | null; section?: number; w: number; h: number };
-
-// ---------- Small SVG helpers ----------
-const qs = <T extends Element>(root: ParentNode, sel: string) => Array.from(root.querySelectorAll<T>(sel));
-const bbox = (el: SVGGraphicsElement) => el.getBBox();
-const by = (cls: string, re: RegExp) => Array.from(cls.match(re) || [])[1];
-
-const unionBBox = (bs: DOMRect[]) => {
-  if (!bs.length) return null;
-  const xs = bs.map(b => b.x), ys = bs.map(b => b.y);
-  const xe = bs.map(b => b.x + b.width), ye = bs.map(b => b.y + b.height);
-  const x = Math.min(...xs), y = Math.min(...ys);
-  return {x, y, width: Math.max(...xe) - x, height: Math.max(...ye) - y};
-};
-
-const updateViewBox = (svg: SVGSVGElement) => {
-  const nodesRoot = svg.querySelector('.mindmap-nodes') as SVGGElement | null;
-  const elkEdges = svg.querySelector('.elk-edges') as SVGGElement | null;
-  const b = unionBBox([nodesRoot, elkEdges].filter(Boolean).map(e => (e as any).getBBox()));
-  if (!b) return;
-  const pad = 32, x = Math.floor(b.x - pad), y = Math.floor(b.y - pad);
-  const w = Math.ceil(b.width + 2 * pad), h = Math.ceil(b.height + 2 * pad);
-  if (!svg.hasAttribute('data-mmf-base-viewBox') && svg.getAttribute('viewBox'))
-    svg.setAttribute('data-mmf-base-viewBox', svg.getAttribute('viewBox')!);
-  svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
-  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-};
-
-// ---------- Color helpers (opaque “transparent” fill) ----------
-const parseRGB = (s: string): [number, number, number] | null => {
-  const m = s.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-  if (m) return [+m[1], +m[2], +m[3]];
-  const h = s.match(/^#([0-9a-f]{6})$/i);
-  if (h) {
-    const n = parseInt(h[1], 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  }
-  return null;
-};
-const toRGB = (r: [number, number, number]) => `rgb(${r[0]}, ${r[1]}, ${r[2]})`;
-const blend = (fg: [number, number, number], bg: [number, number, number], a: number): [number, number, number] => (
-  [Math.round(fg[0] * a + bg[0] * (1 - a)), Math.round(fg[1] * a + bg[1] * (1 - a)), Math.round(fg[2] * a + bg[2] * (1 - a))]
-);
 
 // ---------- Data collection ----------
 const collectInfos = (svg: SVGSVGElement): { infos: GInfo[]; rootId?: string } => {
@@ -213,31 +171,10 @@ const applyCenteredScaleAligned = (target: Element | null, anchor: Element | nul
     t.setAttribute('transform', base);
     return;
   }
-  const toScreen = (x: number, y: number, m: DOMMatrix) => {
-    if ((window as any).DOMPoint) {
-      const p = new DOMPoint(x, y).matrixTransform(m as any);
-      return {x: p.x, y: p.y};
-    }
-    const p = (svg as any).createSVGPoint();
-    p.x = x;
-    p.y = y;
-    const r = p.matrixTransform(m as any);
-    return {x: r.x, y: r.y};
-  };
+
   const invT = tCTM.inverse();
-  const toLocal = (sx: number, sy: number) => {
-    if ((window as any).DOMPoint) {
-      const p = new DOMPoint(sx, sy).matrixTransform(invT as any);
-      return {x: p.x, y: p.y};
-    }
-    const p = (svg as any).createSVGPoint();
-    p.x = sx;
-    p.y = sy;
-    const r = p.matrixTransform(invT as any);
-    return {x: r.x, y: r.y};
-  };
-  const tS = toScreen(tC.x, tC.y, tCTM as any), aS = toScreen(aC.x, aC.y, aCTM as any);
-  const tL = toLocal(tS.x, tS.y), aL = toLocal(aS.x, aS.y);
+  const tS = toScreen(svg, tCTM as any, tC.x, tC.y), aS = toScreen(svg, tCTM as any, aC.x, aC.y);
+  const tL = toLocal(svg, invT, tS.x, tS.y), aL = toLocal(svg, invT, aS.x, aS.y);
   const dx = aL.x - tL.x, dy = aL.y - tL.y;
   t.setAttribute('transform', `${base} translate(${dx},${dy}) scale(${layerScale})`.trim());
   (t as any).style.transformOrigin = 'center';
