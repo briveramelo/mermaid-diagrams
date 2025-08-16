@@ -1,6 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import React, {RefObject, useEffect, useCallback} from 'react';
-import {bbox, by, qs} from "@/tools/svgHelpers.tsx";
+import {bbox, by, qs, updateViewBox} from "@/tools/svgHelpers.tsx";
 import {GInfo, LayerConfig} from "@/tools/mindMapTypes.tsx";
 import {drawEdges, styleDiagram} from "@/tools/mindMapUtils.tsx";
 
@@ -39,7 +39,7 @@ const buildBuckets = (infos: GInfo[]) => {
 };
 
 // ---------- ELK layered per-side, vertically aligned ----------
-const layoutLeftRight = async (svg: SVGSVGElement, infos: GInfo[], rootId: string) => {
+const layoutLeftRight = async (infos: GInfo[], rootId: string, elkLayoutOptions: object) => {
   const elk = new ELK();
   type Pos = { x: number; y: number; w: number; h: number };
   const positions = new Map<string, Pos>();
@@ -58,13 +58,12 @@ const layoutLeftRight = async (svg: SVGSVGElement, infos: GInfo[], rootId: strin
     }));
 
     const laid = await elk.layout({
-      id: `g-${b.dir}`, layoutOptions: {
-        'elk.algorithm': 'layered',
+      id: `g-${b.dir}`,
+      layoutOptions: {
+        ...elkLayoutOptions,
         'elk.direction': b.dir,
-        'spacing.nodeNodeBetweenLayers': '40',
-        'spacing.nodeNode': '28',
-        'org.eclipse.elk.padding': '{top:12,left:12,bottom:12,right:12}'
-      }, children, edges
+      },
+      children, edges
     } as any);
 
     const r = (laid.children || []).find(c => c.id === rootId);
@@ -96,6 +95,7 @@ export type MindMapFormatterProps = {
   minConfig: LayerConfig;
   maxConfig: LayerConfig;
   colors: string[];
+  elkLayoutOptions: object;
 };
 
 // ---------- Component ----------
@@ -105,7 +105,8 @@ const MindMapFormatter: React.FC<MindMapFormatterProps> = (
     layerCount,
     minConfig,
     maxConfig,
-    colors
+    colors,
+    elkLayoutOptions,
   }) => {
   const applyFormatting = useCallback(async () => {
     const svg = containerRef.current?.querySelector('svg') as SVGSVGElement | null;
@@ -114,7 +115,7 @@ const MindMapFormatter: React.FC<MindMapFormatterProps> = (
     // Collect data and run layout
     const {infos, rootId} = collectInfos(svg);
     if (!infos.length || !rootId) return;
-    const {positions, rootTranslate} = await layoutLeftRight(svg, infos, rootId);
+    const {positions, rootTranslate} = await layoutLeftRight(infos, rootId, elkLayoutOptions);
 
     // Place nodes (root is vertically centered; others use ELK positions)
     const rootInfo = infos.find(i => i.id === rootId)!;
@@ -128,10 +129,8 @@ const MindMapFormatter: React.FC<MindMapFormatterProps> = (
       }
     });
 
-    // Draw edges & fit viewBox
     drawEdges(svg, infos, positions, rootTranslate, rootId);
-
-    // Styling pass
+    updateViewBox(svg);
     styleDiagram(svg, layerCount, colors, minConfig, maxConfig);
   }, [containerRef, layerCount, minConfig, maxConfig, colors]);
 

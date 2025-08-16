@@ -4,7 +4,6 @@ import {TransformWrapper, TransformComponent} from "react-zoom-pan-pinch";
 import type {ReactZoomPanPinchRef, ReactZoomPanPinchContentRef} from "react-zoom-pan-pinch";
 import {downloadSvg, downloadPdf} from "@/tools/downloader";
 import { MindMapFormatter } from "@/components/MindMapFormatter.tsx";
-import type { MindMapFormatterHandle } from "@/components/MindMapFormatter.tsx";
 
 export interface MermaidWrapperProps {
   rawMermaidFileText: string;
@@ -13,7 +12,6 @@ export interface MermaidWrapperProps {
 export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<ReactZoomPanPinchRef | null>(null);
-  const formatterRef = useRef<MindMapFormatterHandle | null>(null);
   const [scale, setScale] = useState(1);
   const colors = [
     "#60a5fa",
@@ -151,14 +149,6 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
                 </button>
                 <button type="button" onClick={() => downloadPdf(containerRef)} aria-label="Download PDF">Download PDF
                 </button>
-                <button
-                  type="button"
-                  onClick={() => formatterRef.current?.refresh()}
-                  aria-label="Refresh layout styles"
-                  title="Refresh layout styles"
-                >
-                  Refresh Styles
-                </button>
               </div>
             </div>
           )}
@@ -192,12 +182,17 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
               </div>
             </TransformComponent>
           <MindMapFormatter
-            ref={formatterRef}
             containerRef={containerRef}
             layerCount={layerCount}
             maxConfig={{ nodeFontSize: 24, nodePadding: 20, edgeStrokeWidth: 6, boxScale: 1.25 }}
             minConfig={{ nodeFontSize: 12, nodePadding: 4, edgeStrokeWidth: 1, boxScale: .75 }}
             colors={colors}
+            elkLayoutOptions={{
+              'elk.algorithm': 'layered',
+              'spacing.nodeNodeBetweenLayers': '20',
+              'spacing.nodeNode': '10',
+              'org.eclipse.elk.padding': '{top:12,left:12,bottom:12,right:12}',
+            }}
           />
         </>
       )}

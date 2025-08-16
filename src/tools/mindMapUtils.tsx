@@ -34,7 +34,6 @@ export const drawEdges = (svg: SVGSVGElement, infos: GInfo[], positions: Map<str
     g.appendChild(path);
   });
   grp.appendChild(g);
-  updateViewBox(svg);
 };
 
 // ---------- Styling ----------
