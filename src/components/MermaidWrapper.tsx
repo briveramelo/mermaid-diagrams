@@ -3,7 +3,7 @@ import MermaidBlock from "@/components/MermaidBlock";
 import {TransformWrapper, TransformComponent} from "react-zoom-pan-pinch";
 import type {ReactZoomPanPinchRef, ReactZoomPanPinchContentRef} from "react-zoom-pan-pinch";
 import {downloadSvg, downloadPdf} from "@/tools/downloader";
-import { MindMapFormatter } from "@/components/MindMapFormatter.tsx";
+import {MindMapFormatter} from "@/components/MindMapFormatter.tsx";
 
 export interface MermaidWrapperProps {
   rawMermaidFileText: string;
@@ -152,40 +152,49 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
               </div>
             </div>
           )}
-            {!controlsVisible && (
-              <button
-                type="button"
-                onClick={() => setControlsVisible(true)}
-                aria-label="Show controls"
-                title="Show controls"
-                style={{
-                  position: 'fixed',
-                  top: 12, left: 12,
-                  zIndex: 100,
-                  padding: 6,
-                  borderRadius: 6,
-                  border: '1px solid rgba(255,255,255,0.25)',
-                  background: 'rgba(0,0,0,0.4)',
-                  color: '#fff',
-                  lineHeight: 1,
-                  cursor: 'pointer'
-                }}
-              >☰</button>
-            )}
+          {!controlsVisible && (
+            <button
+              type="button"
+              onClick={() => setControlsVisible(true)}
+              aria-label="Show controls"
+              title="Show controls"
+              style={{
+                position: 'fixed',
+                top: 12, left: 12,
+                zIndex: 100,
+                padding: 6,
+                borderRadius: 6,
+                border: '1px solid rgba(255,255,255,0.25)',
+                background: 'rgba(0,0,0,0.4)',
+                color: '#fff',
+                lineHeight: 1,
+                cursor: 'pointer'
+              }}
+            >☰</button>
+          )}
 
-            <TransformComponent
-              wrapperStyle={{width: '100%', height: '100%', flex: 1, overflow: 'visible', cursor: 'move'}}
-              contentStyle={{width: '100%', height: '100%', overflow: 'visible', cursor: 'move'}}
-            >
-              <div ref={containerRef}>
-                <MermaidBlock rawMermaidFileText={rawMermaidFileText}/>
-              </div>
-            </TransformComponent>
+          <TransformComponent
+            wrapperStyle={{width: '100%', height: '100%', flex: 1, overflow: 'visible', cursor: 'move'}}
+            contentStyle={{width: '100%', height: '100%', overflow: 'visible', cursor: 'move'}}
+          >
+            <div ref={containerRef}>
+              <MermaidBlock rawMermaidFileText={rawMermaidFileText}/>
+            </div>
+          </TransformComponent>
           <MindMapFormatter
             containerRef={containerRef}
             layerCount={layerCount}
-            maxConfig={{ nodeFontSize: 24, nodePadding: 20, edgeStrokeWidth: 6, boxScale: 1.25 }}
-            minConfig={{ nodeFontSize: 12, nodePadding: 4, edgeStrokeWidth: 1, boxScale: .75 }}
+            maxConfig={{nodeFontSize: 24, nodePadding: 20, edgeStrokeWidth: 6, boxScale: 1.5}}
+            minConfig={{nodeFontSize: 12, nodePadding: 4, edgeStrokeWidth: 1, boxScale: .75}}
+            bucketConfig={
+              {
+                buckets: [
+                  {dir: 'RIGHT', weight: 0.5},
+                  {dir: 'LEFT', weight: 0.5},
+                  // {dir: 'UP', weight: 0.05},
+                  // {dir: 'DOWN', weight: 0.05},
+                ]
+              }}
             colors={colors}
             elkLayoutOptions={{
               'elk.algorithm': 'layered',
@@ -199,11 +208,11 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
               charge: -1500,
               collidePadding: 10,
               linkStrength: 0.3,
-              linkDistanceScale: 1.0,
-              firstLevelDistanceScale: 0.2, // shorten only level-1 edges
+              linkDistanceScale: .1,
+              firstLevelDistanceScale: .1, // shorten only level-1 edges
               radialStrength: 0.01,
-              sideStrength: 0.01,
-              bandYStrength: 0.15,
+              sideStrength: 0.001,
+              bandYStrength: 0.215,
             }}
           />
         </>

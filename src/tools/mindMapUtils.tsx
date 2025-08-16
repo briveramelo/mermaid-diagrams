@@ -1,5 +1,5 @@
 import {blend, parseRGB, toRGB} from "@/tools/colorHelpers.tsx";
-import {by, qs, updateViewBox} from "@/tools/svgHelpers";
+import {by, qs} from "@/tools/svgHelpers";
 import {GInfo, LayerConfig} from "@/tools/mindMapTypes.tsx";
 
 export const drawEdges = (svg: SVGSVGElement, infos: GInfo[], positions: Map<string, {

@@ -5,6 +5,9 @@ import {GInfo, LayerConfig} from "@/tools/mindMapTypes.tsx";
 import {drawEdges, styleDiagram} from "@/tools/mindMapUtils.tsx";
 import { runForcePolish, type ForceConfig, type Pos } from '@/tools/layoutUtils.tsx';
 
+type Dir = 'RIGHT' | 'LEFT' | 'UP' | 'DOWN';
+export type BucketConfig = { buckets: { dir: Dir; weight: number }[] };
+
 // ---------- Data collection ----------
 const collectInfos = (svg: SVGSVGElement): { infos: GInfo[]; rootId?: string } => {
   const gs = qs<SVGGElement>(svg, '.mindmap-nodes > g.mindmap-node');
@@ -20,31 +23,91 @@ const collectInfos = (svg: SVGSVGElement): { infos: GInfo[]; rootId?: string } =
 };
 
 // ---------- Section bucketing (LEFT/RIGHT, balanced by size) ----------
-const buildBuckets = (infos: GInfo[]) => {
-  const sections = Array.from(new Set(infos.map(i => i.section).filter((s): s is number => typeof s === 'number' && s >= 0)));
+const buildBuckets = (infos: GInfo[], bucketConfig: BucketConfig) => {
+  // Determine unique section ids present
+  const sections = Array.from(
+    new Set(
+      infos
+        .map(i => i.section)
+        .filter((s): s is number => typeof s === 'number' && s >= 0)
+    )
+  );
+
+  // Count nodes per section (used for sorting / tie-breaking)
   const counts = new Map<number, number>();
   sections.forEach(s => counts.set(s, 0));
   infos.forEach(i => {
-    if (typeof i.section === 'number' && i.section >= 0) counts.set(i.section, (counts.get(i.section) || 0) + 1);
+    if (typeof i.section === 'number' && i.section >= 0) {
+      counts.set(i.section, (counts.get(i.section) || 0) + 1);
+    }
   });
-  type Bucket = { dir: 'RIGHT' | 'LEFT'; total: number; sections: number[] };
-  const buckets: Bucket[] = [{dir: 'RIGHT', total: 0, sections: []}, {dir: 'LEFT', total: 0, sections: []}];
-  sections.sort((a, b) => (counts.get(b)! - counts.get(a)!)).forEach(sec => {
-    buckets.sort((a, b) => a.total - b.total);
-    buckets[0].sections.push(sec);
-    buckets[0].total += counts.get(sec)!;
-  });
+
+  // Resolve configured buckets or fallback to default two buckets
+  type Bucket = { dir: Dir; weight: number; total: number; sections: number[]; assignedCount: number };
+  const buckets: Bucket[] = bucketConfig.buckets.map(b => ({
+    dir: b.dir,
+    weight: (Number.isFinite(b.weight) && b.weight > 0 ? b.weight : 1),
+    total: 0,
+    sections: [],
+    assignedCount: 0
+  }));
+
+  // Sort sections by size (desc) so big sections get placed first
+  const sortedSections = sections.sort((a, b) => (counts.get(b)! - counts.get(a)!));
+
+  // If there are fewer sections than buckets, we'll just fill what we can.
+  const initial = Math.min(sortedSections.length, buckets.length);
+
+  // Pass 1: ensure each bucket gets at least one section (largest first, in the order of provided buckets)
+  for (let i = 0; i < initial; i++) {
+    const sec = sortedSections[i];
+    const b = buckets[i];
+    b.sections.push(sec);
+    b.assignedCount += 1;
+    b.total += counts.get(sec)!;
+  }
+
+  // Pass 2: weighted fill for remaining sections
+  const EPS = 1e-6;
+  for (let i = initial; i < sortedSections.length; i++) {
+    const sec = sortedSections[i];
+
+    // Choose bucket with the smallest (assignedCount / weight); tie-break on smaller total then smaller assignedCount
+    let bestIdx = 0;
+    let bestScore = Infinity;
+
+    for (let bi = 0; bi < buckets.length; bi++) {
+      const b = buckets[bi];
+      const score = b.assignedCount / (b.weight + EPS);
+      if (
+        score < bestScore ||
+        (Math.abs(score - bestScore) < 1e-12 && (b.total < buckets[bestIdx].total ||
+          (b.total === buckets[bestIdx].total && b.assignedCount < buckets[bestIdx].assignedCount)))
+      ) {
+        bestScore = score;
+        bestIdx = bi;
+      }
+    }
+
+    const chosen = buckets[bestIdx];
+    chosen.sections.push(sec);
+    chosen.assignedCount += 1;
+    chosen.total += counts.get(sec)!;
+  }
+
+  // Map from section id to direction
   const sectionToDir = new Map<number, Bucket['dir']>();
   buckets.forEach(b => b.sections.forEach(s => sectionToDir.set(s, b.dir)));
-  return {buckets, sectionToDir};
+
+  return { buckets, sectionToDir };
 };
 
 // ---------- ELK layered per-side, vertically aligned ----------
-const layoutLeftRight = async (infos: GInfo[], rootId: string, elkLayoutOptions: object) => {
+const layoutLeftRight = async (infos: GInfo[], rootId: string, elkLayoutOptions: object, bucketConfig: BucketConfig) => {
   const elk = new ELK();
   type Pos = { x: number; y: number; w: number; h: number };
   const positions = new Map<string, Pos>();
-  const {buckets} = buildBuckets(infos);
+  const {buckets} = buildBuckets(infos, bucketConfig);
 
   const per: { mid: number; map: Map<string, Pos> }[] = [];
   for (const b of buckets) {
@@ -97,7 +160,8 @@ export type MindMapFormatterProps = {
   maxConfig: LayerConfig;
   colors: string[];
   elkLayoutOptions: object;
-  forceConfig?: ForceConfig;
+  forceConfig: ForceConfig;
+  bucketConfig: BucketConfig;
 };
 
 // ---------- Component ----------
@@ -109,6 +173,7 @@ const MindMapFormatter: React.FC<MindMapFormatterProps> = ({
   colors,
   elkLayoutOptions,
   forceConfig,
+  bucketConfig,
 }) => {
   const applyFormatting = useCallback(async () => {
     const svg = containerRef.current?.querySelector('svg') as SVGSVGElement | null;
@@ -117,10 +182,11 @@ const MindMapFormatter: React.FC<MindMapFormatterProps> = ({
     // Collect data and run layout
     const {infos, rootId} = collectInfos(svg);
     if (!infos.length || !rootId) return;
-    const {positions, rootTranslate} = await layoutLeftRight(infos, rootId, elkLayoutOptions);
+    const {positions, rootTranslate} = await layoutLeftRight(infos, rootId, elkLayoutOptions, bucketConfig);
 
     // Optional d3-force finishing pass
     const polished = runForcePolish(infos, positions, rootTranslate, rootId, forceConfig);
+    // const polished = positions;
 
     // Place nodes (root is vertically centered; others use ELK + force positions)
     const rootInfo = infos.find(i => i.id === rootId)!;
@@ -137,7 +203,7 @@ const MindMapFormatter: React.FC<MindMapFormatterProps> = ({
     drawEdges(svg, infos, polished, rootTranslate, rootId);
     updateViewBox(svg);
     styleDiagram(svg, layerCount, colors, minConfig, maxConfig);
-  }, [containerRef, layerCount, minConfig, maxConfig, colors, forceConfig]);
+  }, [containerRef, layerCount, minConfig, maxConfig, colors, forceConfig, bucketConfig]);
 
   useEffect(() => {
     if (!containerRef.current) return;
