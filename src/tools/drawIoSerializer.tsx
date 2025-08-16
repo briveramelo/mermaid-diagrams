@@ -1,5 +1,5 @@
 import { serializeSvgFrom } from "@/tools/svgSerializer.tsx"
-import { getRootAndSvg } from "@/tools/svgUtils.tsx"
+import { getRootAndSvg, collectText } from "@/tools/svgUtils.tsx"
 import React from "react";
 
 const escapeXml = (str: string) =>
@@ -74,15 +74,6 @@ const getTextStyles = (
   return { fontSize, fontColor }
 }
 
-const textFrom = (root: Element): string => {
-  // Collect visible text content under this subtree
-  const chunks: string[] = []
-  root.querySelectorAll("text").forEach(t => {
-    const s = (t.textContent || "").replace(/\s+/g, " ").trim()
-    if (s) chunks.push(s)
-  })
-  return chunks.join("\n")
-}
 
 /**
  * Converts an SVG diagram into a draw.io compatible mxfile XML string.
@@ -130,7 +121,7 @@ export const serializeDrawIoFrom = (
     const y = toNum(abs.y * sy * scalingFactor)
     const w = toNum(abs.width * sx * shapeScaleFactor)
     const h = toNum(abs.height * sy * shapeScaleFactor)
-    const label = textFrom(g)
+    const label = collectText(g)
 
     const textEl = g.querySelector("text") as SVGTextElement | null
     const { fontSize, fontColor } = textEl ? getTextStyles(textEl) : { fontSize: "16", fontColor: "#000000" }

@@ -32,6 +32,41 @@ export function cloneWithNamespaces(svg: SVGSVGElement): SVGSVGElement {
   return clone
 }
 
+/**
+ * Collect visible text from a subtree. Unlike `textContent`, this preserves
+ * whitespace between adjacent <tspan> segments and splits lines when tspans
+ * explicitly move to a new row via `x`/`dy` attributes.
+ */
+export function collectText(root: Element): string {
+  const textEl = root.querySelector('text')
+  if (!textEl) return ''
+
+  const lines: string[] = []
+  let current = ''
+
+  Array.from(textEl.childNodes).forEach((node) => {
+    const raw = (node.textContent || '').replace(/\s+/g, ' ').trim()
+    if (!raw) return
+
+    const isTspan =
+      node.nodeType === Node.ELEMENT_NODE &&
+      (node as Element).tagName.toLowerCase() === 'tspan'
+    const el = isTspan ? (node as Element) : null
+    const lineBreak =
+      isTspan && (el?.hasAttribute('x') || el?.hasAttribute('dy'))
+
+    if (lineBreak && current) {
+      lines.push(current.trim())
+      current = raw
+    } else {
+      current += (current ? ' ' : '') + raw
+    }
+  })
+
+  if (current) lines.push(current.trim())
+  return lines.join('\n')
+}
+
 /** Inline computed styles so svg2pdf doesn't miss CSS-defined colors/fonts */
 export function inlineComputedStyles(srcSvg: SVGSVGElement, clone: SVGSVGElement) {
   try {
