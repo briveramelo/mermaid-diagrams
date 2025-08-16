@@ -38,6 +38,36 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
       const svg = containerRef.current.querySelector('svg');
       if (!svg) return;
 
+      // --- Color helpers for stroke-aware opaque fills that mimic transparency ---
+      const parseRGB = (str: string): [number, number, number] | null => {
+        // Supports: rgb(r, g, b) and rgba(r, g, b, a)
+        const m = str.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+        if (m) return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+        // Supports: #rrggbb
+        const mh = str.match(/^#([0-9a-f]{6})$/i);
+        if (mh) {
+          const n = parseInt(mh[1], 16);
+          return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        }
+        return null;
+      };
+
+      const toRGBString = (rgb: [number, number, number]) => `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+
+      const blendOver = (fg: [number, number, number], bg: [number, number, number], alpha: number): [number, number, number] => {
+        const a = Math.max(0, Math.min(1, alpha));
+        return [
+          Math.round(fg[0] * a + bg[0] * (1 - a)),
+          Math.round(fg[1] * a + bg[1] * (1 - a)),
+          Math.round(fg[2] * a + bg[2] * (1 - a)),
+        ];
+      };
+
+      // Determine the canvas background color to blend against
+      const containerEl = containerRef.current as HTMLElement;
+      const computedBg = getComputedStyle(containerEl).backgroundColor || '#0b1220';
+      const bgRGB = parseRGB(computedBg) ?? [11, 18, 32];
+
       // Gather all nodes (flat list) excluding the root
       const allNodeGroups = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
       const nodes = allNodeGroups.filter(g => !g.classList.contains('section-root'));
@@ -79,11 +109,18 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
       // Style edges per section color (optional but useful for visual grouping)
       sectionNums.slice(0, actualCount).forEach((secNum, idx) => {
         const color = colors[idx];
-        svg
-          .querySelectorAll<SVGGraphicsElement>(`.mindmap-edges .section-${secNum} path, .mindmap-edges .section-${secNum} line`)
-          .forEach(edge => {
-            edge.style.stroke = color ?? '';
-          });
+
+        // Mermaid/renderer seems to use both `section-*` wrappers and `section-edge-*` directly on edges.
+        // Cover both patterns robustly.
+        const selector = `.mindmap-edges .section-edge-${secNum}`;
+
+        svg.querySelectorAll<SVGGraphicsElement>(selector).forEach(edge => {
+          edge.style.stroke = color ?? '';
+          // Ensure fills on paths are not visible for edges
+          if ((edge as SVGPathElement).tagName.toLowerCase() === 'path') {
+            (edge as SVGPathElement).style.fill = 'none';
+          }
+        });
       });
 
       // Apply per-node styles based on SECTION (color) and DEPTH (size/scale)
@@ -104,18 +141,23 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
         const layerScale = maxConfig.boxScale - depthRatio * (maxConfig.boxScale - minConfig.boxScale);
 
         // Box/background styling: colorize shapes to match section color
-        // and sync stroke width with depth. We keep a subtle fillOpacity so
-        // text remains readable on dark/light themes.
+        // and sync stroke width with depth. We now use an opaque fill that visually mimics the old transparency.
         const shapes = node.querySelectorAll<SVGGraphicsElement>('path, rect, polygon, circle, line');
-        const fillOpacity = Math.max(0, Math.min(1, 0.12 + (1 - depthRatio) * 0.08));
+        // Previous semi-transparent feel, now baked into an opaque color
+        const desiredAlpha = Math.max(0, Math.min(1, 0.12 + (1 - depthRatio) * 0.08));
+
+        // Convert the section color to RGB; if parsing fails, fall back to using the raw color string
+        const fgRGB = color ? parseRGB(color) : null;
+        const blendedFill = fgRGB ? toRGBString(blendOver(fgRGB, bgRGB, desiredAlpha)) : (color ?? '');
+
         shapes.forEach((shape) => {
-          // Apply color to both fill and stroke so the node "box" matches the text color
+          // Keep strokes at the original vivid section color
           shape.style.stroke = color ?? '';
           shape.style.strokeWidth = `${edgeStrokeWidth}px`;
 
-          // Only set fill on closed shapes; lines won't pick up fill anyway
-          shape.style.fill = color ?? '';
-          shape.style.fillOpacity = `${fillOpacity}`;
+          // Use an **opaque** fill that visually matches the old transparent look
+          shape.style.fill = blendedFill;
+          shape.style.fillOpacity = '1';
         });
 
         // Text styling
@@ -193,10 +235,6 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
           // Delta required to align centers in TARGET-LOCAL coordinates
           const dx = aCenterInTarget.x - tCenterInTarget.x;
           const dy = aCenterInTarget.y - tCenterInTarget.y;
-
-          // We'll also scale around the anchor's center, expressed in TARGET-LOCAL coords
-          const axLocal = aCenterInTarget.x;
-          const ayLocal = aCenterInTarget.y;
 
           // Rightmost op runs first in SVG. We want: align first, then scale around anchor.
           const composed = `${base} ` +
