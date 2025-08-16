@@ -95,11 +95,13 @@ const textFrom = (root: Element): string => {
  * @param containerRef Ref to the container div that holds the rendered SVG
  * @param scalingFactor Multiplier applied to positions to spread nodes apart
  * @param shapeScaleFactor Multiplier applied to node width/height to resize shapes
+ * @param strokeScaleFactor Multiplier applied to stroke width to resize stroke
  */
 export const serializeDrawIoFrom = (
   containerRef: React.RefObject<HTMLDivElement | null>,
   scalingFactor: number,
   shapeScaleFactor: number,
+  strokeScaleFactor: number,
 ): string | null => {
   const data = serializeSvgFrom(containerRef)
   const dom = getRootAndSvg(containerRef)
@@ -112,7 +114,8 @@ export const serializeDrawIoFrom = (
   const { sx, sy } = getRootScale(svgEl, width, height)
 
   let id = 1
-  const cells: string[] = ["<mxCell id=\"0\"/>", "<mxCell id=\"1\" parent=\"0\"/>"]
+  const edgeCells: string[] = []
+  const nodeCells: string[] = []
   const nodeInfos: { id: number; x: number; y: number; w: number; h: number }[] = []
 
   // 1) Vertices: treat each mindmap node group as a single vertex using its bbox
@@ -137,7 +140,7 @@ export const serializeDrawIoFrom = (
     const style = `${baseShape}whiteSpace=wrap;html=1;` +
       `fillColor=${fill};strokeColor=${stroke};strokeWidth=${parseFloat(strokeWidth)};` +
       `fontSize=${parseFloat(fontSize)};fontColor=${fontColor};align=center;verticalAlign=middle;`
-    cells.push(
+    nodeCells.push(
       `
 <mxCell id=\"${cellId}\" value=\"${escapeXml(label)}\" style=\"${style}\" vertex=\"1\" parent=\"1\">
   <mxGeometry x=\"${x}\" y=\"${y}\" width=\"${w}\" height=\"${h}\" as=\"geometry\"/>
@@ -169,17 +172,18 @@ export const serializeDrawIoFrom = (
       const cellId = ++id
       const sourceId = findNodeId(ex0, ey0)
       const targetId = findNodeId(ex1, ey1)
-      const style = `edgeStyle=none;rounded=0;html=1;strokeColor=${stroke};strokeWidth=${parseFloat(strokeWidth)};` +
+      const finalStrokeWidth = parseFloat(strokeWidth) * strokeScaleFactor;
+      const style = `edgeStyle=none;rounded=0;html=1;strokeColor=${stroke};strokeWidth=${finalStrokeWidth};` +
         `endArrow=none;startArrow=none;`
       if (sourceId && targetId) {
-        cells.push(
+        edgeCells.push(
           `
 <mxCell id=\"${cellId}\" value=\"\" style=\"${style}\" edge=\"1\" parent=\"1\" source=\"${sourceId}\" target=\"${targetId}\">
   <mxGeometry relative=\"1\" as=\"geometry\"/>
 </mxCell>`
         )
       } else {
-        cells.push(
+        edgeCells.push(
           `
 <mxCell id=\"${cellId}\" value=\"\" style=\"${style}\" edge=\"1\" parent=\"1\">
   <mxGeometry relative=\"1\" as=\"geometry\">
@@ -198,7 +202,7 @@ export const serializeDrawIoFrom = (
 <mxfile host=\"mermaid\">
   <diagram name=\"Page-1\">
     <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="0" connect="1" arrows="0" fold="1" page="1" pageScale="1" pageWidth="${toNum(width * scalingFactor)}" pageHeight="${toNum(height * scalingFactor)}" math="0" shadow="0">
-      <root>${cells.join("")}</root>
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>${edgeCells.join("")}${nodeCells.join("")}</root>
     </mxGraphModel>
   </diagram>
 </mxfile>`

@@ -44,9 +44,10 @@ export const downloadDrawIo = (
   containerRef: React.RefObject<HTMLDivElement | null>,
   scalingFactor: number,
   shapeScaleFactor: number,
+  strokeScaleFactor: number,
   fileName = 'diagram.drawio'
 ) => {
-  const xml = serializeDrawIoFrom(containerRef, scalingFactor, shapeScaleFactor)
+  const xml = serializeDrawIoFrom(containerRef, scalingFactor, shapeScaleFactor, strokeScaleFactor)
   if (!xml) return ''
 
   const blob = new Blob([xml], {type: 'application/xml;charset=utf-8'})
@@ -58,9 +59,10 @@ export const getDrawIo = (
   containerRef: React.RefObject<HTMLDivElement | null>,
   scalingFactor: number,
   shapeScaleFactor: number,
+  strokeScaleFactor: number,
   fileName = 'diagram.drawio'
 ) => {
-  const xml = serializeDrawIoFrom(containerRef, scalingFactor, shapeScaleFactor)
+  const xml = serializeDrawIoFrom(containerRef, scalingFactor, shapeScaleFactor, strokeScaleFactor)
   if (!xml) return ''
   return xml
 }
