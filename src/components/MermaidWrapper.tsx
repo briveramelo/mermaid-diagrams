@@ -193,6 +193,18 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
               'spacing.nodeNode': '10',
               'org.eclipse.elk.padding': '{top:12,left:12,bottom:12,right:12}',
             }}
+            forceConfig={{
+              enabled: true,
+              iterations: 20,
+              charge: -1500,
+              collidePadding: 10,
+              linkStrength: 0.3,
+              linkDistanceScale: 1.0,
+              firstLevelDistanceScale: 0.2, // shorten only level-1 edges
+              radialStrength: 0.01,
+              sideStrength: 0.01,
+              bandYStrength: 0.15,
+            }}
           />
         </>
       )}

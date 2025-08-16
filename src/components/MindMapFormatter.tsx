@@ -3,6 +3,7 @@ import React, {RefObject, useEffect, useCallback} from 'react';
 import {bbox, by, qs, updateViewBox} from "@/tools/svgHelpers.tsx";
 import {GInfo, LayerConfig} from "@/tools/mindMapTypes.tsx";
 import {drawEdges, styleDiagram} from "@/tools/mindMapUtils.tsx";
+import { runForcePolish, type ForceConfig, type Pos } from '@/tools/layoutUtils.tsx';
 
 // ---------- Data collection ----------
 const collectInfos = (svg: SVGSVGElement): { infos: GInfo[]; rootId?: string } => {
@@ -96,18 +97,19 @@ export type MindMapFormatterProps = {
   maxConfig: LayerConfig;
   colors: string[];
   elkLayoutOptions: object;
+  forceConfig?: ForceConfig;
 };
 
 // ---------- Component ----------
-const MindMapFormatter: React.FC<MindMapFormatterProps> = (
-  {
-    containerRef,
-    layerCount,
-    minConfig,
-    maxConfig,
-    colors,
-    elkLayoutOptions,
-  }) => {
+const MindMapFormatter: React.FC<MindMapFormatterProps> = ({
+  containerRef,
+  layerCount,
+  minConfig,
+  maxConfig,
+  colors,
+  elkLayoutOptions,
+  forceConfig,
+}) => {
   const applyFormatting = useCallback(async () => {
     const svg = containerRef.current?.querySelector('svg') as SVGSVGElement | null;
     if (!svg) return;
@@ -117,22 +119,25 @@ const MindMapFormatter: React.FC<MindMapFormatterProps> = (
     if (!infos.length || !rootId) return;
     const {positions, rootTranslate} = await layoutLeftRight(infos, rootId, elkLayoutOptions);
 
-    // Place nodes (root is vertically centered; others use ELK positions)
+    // Optional d3-force finishing pass
+    const polished = runForcePolish(infos, positions, rootTranslate, rootId, forceConfig);
+
+    // Place nodes (root is vertically centered; others use ELK + force positions)
     const rootInfo = infos.find(i => i.id === rootId)!;
     infos.forEach(info => {
       const base = info.g.getAttribute('data-elk-base-transform') ?? (info.g.getAttribute('transform') || '');
       if (!info.g.hasAttribute('data-elk-base-transform')) info.g.setAttribute('data-elk-base-transform', base);
       if (info.id === rootId) info.g.setAttribute('transform', `translate(${rootTranslate.x},${rootTranslate.y})`);
       else {
-        const p = positions.get(info.id);
+        const p = polished.get(info.id);
         if (p) info.g.setAttribute('transform', `translate(${p.x},${p.y})`);
       }
     });
 
-    drawEdges(svg, infos, positions, rootTranslate, rootId);
+    drawEdges(svg, infos, polished, rootTranslate, rootId);
     updateViewBox(svg);
     styleDiagram(svg, layerCount, colors, minConfig, maxConfig);
-  }, [containerRef, layerCount, minConfig, maxConfig, colors]);
+  }, [containerRef, layerCount, minConfig, maxConfig, colors, forceConfig]);
 
   useEffect(() => {
     if (!containerRef.current) return;
