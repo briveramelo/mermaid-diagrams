@@ -185,8 +185,8 @@ const MindMapFormatter: React.FC<MindMapFormatterProps> = ({
     const {positions, rootTranslate} = await layoutLeftRight(infos, rootId, elkLayoutOptions, bucketConfig);
 
     // Optional d3-force finishing pass
-    const polished = runForcePolish(infos, positions, rootTranslate, rootId, forceConfig);
-    // const polished = positions;
+    // const polished = runForcePolish(infos, positions, rootTranslate, rootId, forceConfig);
+    const polished = positions;
 
     // Place nodes (root is vertically centered; others use ELK + force positions)
     const rootInfo = infos.find(i => i.id === rootId)!;

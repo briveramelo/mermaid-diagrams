@@ -2,6 +2,13 @@ import {blend, parseRGB, toRGB} from "@/tools/colorHelpers.tsx";
 import {by, qs} from "@/tools/svgHelpers";
 import {GInfo, LayerConfig} from "@/tools/mindMapTypes.tsx";
 
+export const getDepth = (g: Element) => {
+  const d = (g as any).dataset?.depth;
+  if (d != null && !Number.isNaN(+d)) return +d;
+  const cls = Array.from(g.classList).find(c => /^mm-depth-(\d+)$/.test(c));
+  return cls ? +cls.split('-').pop()! : 1;
+};
+
 export const drawEdges = (svg: SVGSVGElement, infos: GInfo[], positions: Map<string, {
   x: number;
   y: number;
@@ -27,23 +34,23 @@ export const drawEdges = (svg: SVGSVGElement, infos: GInfo[], positions: Map<str
     const x1 = s.x + s.w / 2, y1 = s.y + s.h / 2, x2 = t.x + t.w / 2, y2 = t.y + t.h / 2;
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', `M ${x1},${y1} Q ${(x1 + x2) / 2},${(y1 + y2) / 2} ${x2},${y2}`);
-    if (typeof e.section === 'number') path.setAttribute('class', `edge section-edge-${e.section}`);
+    const cls = typeof e.section === 'number' ? `edge section-edge-${e.section}` : 'edge';
+    path.setAttribute('class', cls);
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke-width', '2');
     path.setAttribute('vector-effect', 'non-scaling-stroke');
+    const tInfo = infos.find(i => i.id === e.id);
+    const depth = tInfo ? getDepth(tInfo.g) : undefined;
+    if (depth != null) {
+      path.classList.add(`mm-depth-${depth}`);
+      (path as any).dataset.depth = String(depth);
+    }
     g.appendChild(path);
   });
   grp.appendChild(g);
 };
 
 // ---------- Styling ----------
-export const getDepth = (g: SVGGElement) => {
-  const d = (g as any).dataset?.depth;
-  if (d != null && !Number.isNaN(+d)) return +d;
-  const cls = Array.from(g.classList).find(c => /^mm-depth-(\d+)$/.test(c));
-  return cls ? +cls.split('-').pop()! : 1;
-};
-
 export const colorizeEdges = (svg: SVGSVGElement, sectionNums: number[], colors: string[], layerCount: number) => {
   const actual = Math.min(layerCount, sectionNums.length);
   for (let i = 0; i < actual; i++) qs<SVGGraphicsElement>(svg, `.mindmap-edges .section-edge-${sectionNums[i]}`).forEach(e => {
@@ -121,6 +128,14 @@ export const styleDiagram = (svg: SVGSVGElement, layerCount: number, colors: str
   const secToIdx = new Map<number, number>();
   const actual = Math.min(layerCount, sectionNums.length);
   for (let i = 0; i < actual; i++) secToIdx.set(sectionNums[i], i);
+
+  qs<SVGPathElement>(svg, '.mindmap-edges .edge').forEach(edge => {
+    const d = getDepth(edge);
+    const r = maxDepth <= 1 ? 0 : (d - 1) / (maxDepth - 1);
+    const strokeW = max.edgeStrokeWidth - r * (max.edgeStrokeWidth - min.edgeStrokeWidth);
+    edge.style.strokeWidth = `${strokeW}px`;
+    (edge as any).style.vectorEffect = 'non-scaling-stroke';
+  });
 
   all.forEach(node => {
     const sc = Array.from(node.classList).find(c => sectionRe.test(c));
