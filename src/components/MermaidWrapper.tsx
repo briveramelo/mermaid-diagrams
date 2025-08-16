@@ -2,14 +2,15 @@ import React, {useEffect, useRef, useState} from "react";
 import MermaidBlock from "@/components/MermaidBlock";
 import {TransformWrapper, TransformComponent} from "react-zoom-pan-pinch";
 import type {ReactZoomPanPinchRef, ReactZoomPanPinchContentRef} from "react-zoom-pan-pinch";
-import {downloadSvg, downloadPdf, downloadDrawIo} from "@/tools/downloader";
+import {downloadSvg, downloadPdf, downloadDrawIo, getDrawIo} from "@/tools/downloader";
 import {MindMapFormatter} from "@/components/MindMapFormatter.tsx";
 
 export interface MermaidWrapperProps {
   rawMermaidFileText: string;
+  onDrawIoXml?: (xml: string) => void;
 }
 
-export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps) {
+export default function MermaidWrapper({rawMermaidFileText, onDrawIoXml}: MermaidWrapperProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wrapperRef = useRef<ReactZoomPanPinchRef | null>(null);
   const [scale, setScale] = useState(1);
@@ -149,7 +150,19 @@ export default function MermaidWrapper({rawMermaidFileText}: MermaidWrapperProps
                 </button>
                 <button type="button" onClick={() => downloadPdf(containerRef)} aria-label="Download PDF">Download PDF
                 </button>
-                <button type="button" onClick={() => downloadDrawIo(containerRef)} aria-label="Download draw.io">Download draw.io</button>
+                <button type="button" onClick={() => downloadDrawIo(containerRef)} aria-label="Download draw.io">
+                  Download draw.io
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const xml = getDrawIo(containerRef);
+                    onDrawIoXml?.(xml);
+                  }}
+                  aria-label="Download draw.io"
+                >
+                  Render draw.io
+                </button>
               </div>
             </div>
           )}

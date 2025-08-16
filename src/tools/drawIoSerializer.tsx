@@ -1,4 +1,5 @@
 import { serializeSvgFrom } from "@/tools/svgSerializer.tsx"
+import { getRootAndSvg } from "@/tools/svgUtils.tsx"
 import React from "react";
 
 const escapeXml = (str: string) =>
@@ -85,11 +86,12 @@ export const serializeDrawIoFrom = (
   containerRef: React.RefObject<HTMLDivElement | null>,
 ): string | null => {
   const data = serializeSvgFrom(containerRef)
-  if (!data) return null
+  const dom = getRootAndSvg(containerRef)
+  if (!data || !dom) return null
 
-  const svgEl = (data as any).element as SVGSVGElement
-  const width = Number((data as any).width) || Number((svgEl?.getAttribute("width") || 1000))
-  const height = Number((data as any).height) || Number((svgEl?.getAttribute("height") || 1000))
+  const svgEl = dom.svg as SVGSVGElement
+  const width = Number(data.width) || Number(svgEl.getAttribute("width") || 1000)
+  const height = Number(data.height) || Number(svgEl.getAttribute("height") || 1000)
 
   let id = 1
   const cells: string[] = ["<mxCell id=\"0\"/>", "<mxCell id=\"1\" parent=\"0\"/>"]

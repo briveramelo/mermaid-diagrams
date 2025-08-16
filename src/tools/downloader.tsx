@@ -45,10 +45,20 @@ export const downloadDrawIo = (
   fileName = 'diagram.drawio'
 ) => {
   const xml = serializeDrawIoFrom(containerRef)
-  if (!xml) return
+  if (!xml) return ''
 
   const blob = new Blob([xml], {type: 'application/xml;charset=utf-8'})
   download(blob, fileName)
+  return xml
+}
+
+export const getDrawIo = (
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  fileName = 'diagram.drawio'
+) => {
+  const xml = serializeDrawIoFrom(containerRef)
+  if (!xml) return ''
+  return xml
 }
 
 const download = (blob: Blob, fileName: string) => {

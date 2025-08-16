@@ -22,13 +22,4 @@ mindmap
       Lakeflow Connect
         Managed Connectors
           Salesforce Connector
-        Standard Connectors
-          JDBC Connector
-        File Ingestion
-          Auto Loader
-      Change Data Capture
-        Lakeflow Declarative Pipelines
-    💾 Storage
-      Delta Lake
-        Parquet Format
 ```
