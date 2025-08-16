@@ -200,7 +200,7 @@ const MindMapFormatter: React.FC<MindMapFormatterProps> = ({
       }
     });
 
-    drawEdges(svg, infos, polished, rootTranslate, rootId);
+    drawEdges(svg, infos, polished, rootTranslate, minConfig, maxConfig, rootId);
     updateViewBox(svg);
     styleDiagram(svg, layerCount, colors, minConfig, maxConfig);
   }, [containerRef, layerCount, minConfig, maxConfig, colors, forceConfig, bucketConfig]);

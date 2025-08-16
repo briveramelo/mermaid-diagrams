@@ -9,12 +9,15 @@ export const getDepth = (g: Element) => {
   return cls ? +cls.split('-').pop()! : 1;
 };
 
-export const drawEdges = (svg: SVGSVGElement, infos: GInfo[], positions: Map<string, {
-  x: number;
-  y: number;
-  w: number;
-  h: number
-}>, rootTranslate: { x: number; y: number }, rootId?: string) => {
+export const drawEdges = (
+  svg: SVGSVGElement,
+  infos: GInfo[],
+  positions: Map<string, { x: number; y: number; w: number; h: number }>,
+  rootTranslate: { x: number; y: number },
+  min: LayerConfig,
+  max: LayerConfig,
+  rootId?: string
+) => {
   const grp = svg.querySelector('.mindmap-edges');
   if (!grp) return;
   grp.innerHTML = '';
@@ -27,6 +30,8 @@ export const drawEdges = (svg: SVGSVGElement, infos: GInfo[], positions: Map<str
     w: rootInfo.w,
     h: rootInfo.h
   } : positions.get(id);
+  const depths = infos.map(i => getDepth(i.g));
+  const maxDepth = Math.max(1, ...depths);
   infos.filter(n => n.parent && n.id !== rootId).forEach(e => {
     const s = pos(e.parent!);
     const t = pos(e.id);
@@ -37,14 +42,17 @@ export const drawEdges = (svg: SVGSVGElement, infos: GInfo[], positions: Map<str
     const cls = typeof e.section === 'number' ? `edge section-edge-${e.section}` : 'edge';
     path.setAttribute('class', cls);
     path.setAttribute('fill', 'none');
-    path.setAttribute('stroke-width', '2');
-    path.setAttribute('vector-effect', 'non-scaling-stroke');
     const tInfo = infos.find(i => i.id === e.id);
     const depth = tInfo ? getDepth(tInfo.g) : undefined;
+    let strokeW = max.edgeStrokeWidth;
     if (depth != null) {
+      const r = maxDepth <= 1 ? 0 : (depth - 1) / (maxDepth - 1);
+      strokeW = max.edgeStrokeWidth - r * (max.edgeStrokeWidth - min.edgeStrokeWidth);
       path.classList.add(`mm-depth-${depth}`);
       (path as any).dataset.depth = String(depth);
     }
+    path.setAttribute('stroke-width', String(strokeW));
+    path.setAttribute('vector-effect', 'non-scaling-stroke');
     g.appendChild(path);
   });
   grp.appendChild(g);
