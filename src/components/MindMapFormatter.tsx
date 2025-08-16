@@ -134,31 +134,77 @@ const MindMapFormatter = forwardRef<MindMapFormatterHandle, MindMapFormatterProp
           if (!target || !anchor) return;
           const t = target as unknown as SVGGraphicsElement;
           const a = anchor as unknown as SVGGraphicsElement;
-          if (!t.getBBox || !a.getBBox) return;
+          const svg = t.ownerSVGElement;
+          if (!svg || !t.getBBox || !a.getBBox) return;
 
-          // Measure boxes in current user space (includes ancestor transforms)
+          // Compute local centers for target and anchor
           const tb = t.getBBox();
           const ab = a.getBBox();
-          const acx = ab.x + ab.width / 2;
-          const acy = ab.y + ab.height / 2;
+          const tCenterLocal = { x: tb.x + tb.width / 2, y: tb.y + tb.height / 2 };
+          const aCenterLocal = { x: ab.x + ab.width / 2, y: ab.y + ab.height / 2 };
 
-          // Clean any prior formatter transforms to avoid accumulation
-          const prev = t.getAttribute('transform') || '';
-          const cleaned = prev
-            // remove our full T-S-T tripod if present
-            .replace(/\s*translate\([^)]*\)\s*scale\([^)]*\)\s*translate\([^)]*\)/g, '')
-            // remove trailing single translates we might have added
-            .replace(/\s*translate\([^)]*\)\s*$/g, '')
-            // remove stray scales if any
-            .replace(/\s*scale\([^)]*\)/g, '');
+          // Preserve the element's original (Mermaid) transform once and reuse it
+          const current = t.getAttribute('transform') || '';
+          const base = t.getAttribute('data-mmf-base-transform') ?? current;
+          if (!t.hasAttribute('data-mmf-base-transform')) {
+            t.setAttribute('data-mmf-base-transform', base);
+          }
 
-          // Compose: first align centers, then scale around the anchor's center
-          // Order matters: rightmost op applies first.
-          const centeredScale = `translate(${acx},${acy}) scale(${layerScale}) translate(${-acx},${-acy})`;
+          // Temporarily reset to base before measuring matrices to avoid compounding
+          if (current !== base) t.setAttribute('transform', base);
 
-          t.setAttribute('transform', `${cleaned} ${centeredScale}`.trim());
+          const tCTM = t.getCTM();
+          const aCTM = a.getCTM();
+          if (!tCTM || !aCTM) {
+            // Restore base just in case and bail
+            t.setAttribute('transform', base);
+            return;
+          }
 
-          // Defensive CSS hints (some renderers honor these for SVG groups)
+          const toScreen = (x: number, y: number, m: DOMMatrix) => {
+            if (typeof (window as any).DOMPoint === 'function') {
+              const p = new DOMPoint(x, y).matrixTransform(m as any);
+              return { x: p.x, y: p.y };
+            }
+            const p = (svg as any).createSVGPoint();
+            p.x = x; p.y = y;
+            const r = p.matrixTransform(m as any);
+            return { x: r.x, y: r.y };
+          };
+
+          const invT = tCTM.inverse();
+          const toTargetLocal = (sx: number, sy: number) => {
+            if (typeof (window as any).DOMPoint === 'function') {
+              const p = new DOMPoint(sx, sy).matrixTransform(invT as any);
+              return { x: p.x, y: p.y };
+            }
+            const p = (svg as any).createSVGPoint();
+            p.x = sx; p.y = sy;
+            const r = p.matrixTransform(invT as any);
+            return { x: r.x, y: r.y };
+          };
+
+          // Convert each center to screen space, then into TARGET-LOCAL space
+          const tCenterScreen = toScreen(tCenterLocal.x, tCenterLocal.y, tCTM as any);
+          const aCenterScreen = toScreen(aCenterLocal.x, aCenterLocal.y, aCTM as any);
+          const tCenterInTarget = toTargetLocal(tCenterScreen.x, tCenterScreen.y);
+          const aCenterInTarget = toTargetLocal(aCenterScreen.x, aCenterScreen.y);
+
+          // Delta required to align centers in TARGET-LOCAL coordinates
+          const dx = aCenterInTarget.x - tCenterInTarget.x;
+          const dy = aCenterInTarget.y - tCenterInTarget.y;
+
+          // We'll also scale around the anchor's center, expressed in TARGET-LOCAL coords
+          const axLocal = aCenterInTarget.x;
+          const ayLocal = aCenterInTarget.y;
+
+          // Rightmost op runs first in SVG. We want: align first, then scale around anchor.
+          const composed = `${base} ` +
+            `translate(${dx},${dy})` +
+            `scale(${layerScale})`
+          ;
+
+          t.setAttribute('transform', composed.trim());
           (t as any).style.transformOrigin = 'center';
           (t as any).style.transformBox = 'fill-box';
         };
