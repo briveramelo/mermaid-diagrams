@@ -70,6 +70,10 @@ export default function MermaidWrapper({rawMermaidFileText, onDrawIoXml}: Mermai
     step: .3,
     startX: 420,
     startY: 15,
+    drawIo:{
+      scalingFactor: 2,
+      shapeScaleFactor: 1,
+    }
   })
   const [controlsVisible, setControlsVisible] = useState(true);
 
@@ -150,13 +154,13 @@ export default function MermaidWrapper({rawMermaidFileText, onDrawIoXml}: Mermai
                 </button>
                 <button type="button" onClick={() => downloadPdf(containerRef)} aria-label="Download PDF">Download PDF
                 </button>
-                <button type="button" onClick={() => downloadDrawIo(containerRef)} aria-label="Download draw.io">
+                <button type="button" onClick={() => downloadDrawIo(containerRef, config.drawIo.scalingFactor, config.drawIo.scalingFactor)} aria-label="Download draw.io">
                   Download draw.io
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    const xml = getDrawIo(containerRef);
+                    const xml = getDrawIo(containerRef, config.drawIo.scalingFactor, config.drawIo.scalingFactor);
                     onDrawIoXml?.(xml);
                   }}
                   aria-label="Download draw.io"

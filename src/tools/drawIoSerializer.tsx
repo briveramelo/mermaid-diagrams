@@ -91,9 +91,15 @@ const textFrom = (root: Element): string => {
  * so that we can use getBBox()/getCTM() to compute absolute positions that
  * include all nested <g transform="..."> chains. This fixes the previous
  * behavior where x/y/width/height defaulted to 0 when attributes were missing.
+ *
+ * @param containerRef Ref to the container div that holds the rendered SVG
+ * @param scalingFactor Multiplier applied to positions to spread nodes apart
+ * @param shapeScaleFactor Multiplier applied to node width/height to resize shapes
  */
 export const serializeDrawIoFrom = (
   containerRef: React.RefObject<HTMLDivElement | null>,
+  scalingFactor: number,
+  shapeScaleFactor: number,
 ): string | null => {
   const data = serializeSvgFrom(containerRef)
   const dom = getRootAndSvg(containerRef)
@@ -117,10 +123,10 @@ export const serializeDrawIoFrom = (
     const bg = (g.querySelector(".node-bkg, rect.background, rect, circle, path") as SVGGraphicsElement) || group
     const { fill, stroke, strokeWidth } = getComputedFillStroke(bg as Element)
     const abs = getAbsoluteBBox(group)
-    const x = toNum(abs.x * sx)
-    const y = toNum(abs.y * sy)
-    const w = toNum(abs.width * sx)
-    const h = toNum(abs.height * sy)
+    const x = toNum(abs.x * sx * scalingFactor)
+    const y = toNum(abs.y * sy * scalingFactor)
+    const w = toNum(abs.width * sx * shapeScaleFactor)
+    const h = toNum(abs.height * sy * shapeScaleFactor)
     const label = textFrom(g)
 
     const textEl = g.querySelector("text") as SVGTextElement | null
@@ -155,10 +161,10 @@ export const serializeDrawIoFrom = (
       const m = path.getCTM()
       const q0 = m ? new DOMPoint(_p0.x, _p0.y).matrixTransform(m) : _p0
       const q1 = m ? new DOMPoint(_p1.x, _p1.y).matrixTransform(m) : _p1
-      const ex0 = toNum(q0.x * sx)
-      const ey0 = toNum(q0.y * sy)
-      const ex1 = toNum(q1.x * sx)
-      const ey1 = toNum(q1.y * sy)
+      const ex0 = toNum(q0.x * sx * scalingFactor)
+      const ey0 = toNum(q0.y * sy * scalingFactor)
+      const ex1 = toNum(q1.x * sx * scalingFactor)
+      const ey1 = toNum(q1.y * sy * scalingFactor)
       const { stroke, strokeWidth } = getComputedFillStroke(path)
       const cellId = ++id
       const sourceId = findNodeId(ex0, ey0)
@@ -191,7 +197,7 @@ export const serializeDrawIoFrom = (
   const xml = `
 <mxfile host=\"mermaid\">
   <diagram name=\"Page-1\">
-    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="0" connect="1" arrows="0" fold="1" page="1" pageScale="1" pageWidth=\"${toNum(width)}\" pageHeight=\"${toNum(height)}\" math=\"0\" shadow=\"0\">
+    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="0" connect="1" arrows="0" fold="1" page="1" pageScale="1" pageWidth="${toNum(width * scalingFactor)}" pageHeight="${toNum(height * scalingFactor)}" math="0" shadow="0">
       <root>${cells.join("")}</root>
     </mxGraphModel>
   </diagram>

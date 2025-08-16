@@ -12,7 +12,7 @@ export default function App() {
   return (
     <div className="app">
       <MermaidWrapper
-        rawMermaidFileText={simple_mind}
+        rawMermaidFileText={db_mind}
         onDrawIoXml={setDrawIoXml}
       />
       {drawIoXml && (

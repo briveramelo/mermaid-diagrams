@@ -42,9 +42,11 @@ export const downloadPdf = async (
  */
 export const downloadDrawIo = (
   containerRef: React.RefObject<HTMLDivElement | null>,
+  scalingFactor: number,
+  shapeScaleFactor: number,
   fileName = 'diagram.drawio'
 ) => {
-  const xml = serializeDrawIoFrom(containerRef)
+  const xml = serializeDrawIoFrom(containerRef, scalingFactor, shapeScaleFactor)
   if (!xml) return ''
 
   const blob = new Blob([xml], {type: 'application/xml;charset=utf-8'})
@@ -54,9 +56,11 @@ export const downloadDrawIo = (
 
 export const getDrawIo = (
   containerRef: React.RefObject<HTMLDivElement | null>,
+  scalingFactor: number,
+  shapeScaleFactor: number,
   fileName = 'diagram.drawio'
 ) => {
-  const xml = serializeDrawIoFrom(containerRef)
+  const xml = serializeDrawIoFrom(containerRef, scalingFactor, shapeScaleFactor)
   if (!xml) return ''
   return xml
 }
