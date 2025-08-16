@@ -1,0 +1,2 @@
+export type LayerConfig = { nodeFontSize: number; nodePadding: number; edgeStrokeWidth: number; boxScale: number; };
+export type GInfo = { g: SVGGElement; id: string; parent?: string | null; section?: number; w: number; h: number };
