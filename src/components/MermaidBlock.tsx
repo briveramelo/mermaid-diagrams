@@ -25,8 +25,10 @@ export default function MermaidBlock({ rawMermaidFileText, className }: MermaidB
         const { svg, bindFunctions } = await mermaid.render(id, mermaid_text);
         el.innerHTML = svg;
         bindFunctions?.(el);
-        tagMindmapNodesByDepth(el, mermaid_text);
+        // Tag tree structure (adds depth data attributes) before
+        // applying mm-depth-* classes so deeper nodes are handled
         tagMindmapTree(el, mermaid_text);
+        tagMindmapNodesByDepth(el);
       } catch (err) {
         console.error(err);
       }
@@ -72,68 +74,8 @@ function extractLabelFromSource(rawLine: string): string {
   return normalizeLabel(line);
 }
 
-// 1) Parse depths from Mermaid text, keyed by `{section}-{label}` (root = depth 0, but we skip tagging it)
-function parseMindmapDepths(raw: string): Map<string, number> {
-  const depthByKey = new Map<string, number>();
-
-  const lines = raw.split(/\r?\n/).map(l => l.replace(/\t/g, '  '));
-
-  // Find the `mindmap` keyword and start AFTER it
-  const mmIdx = lines.findIndex(l => /^\s*mindmap\s*$/i.test(l.trim()));
-  if (mmIdx === -1) return depthByKey;
-
-  // First non-empty, non-comment line after `mindmap` is the root
-  let start = mmIdx + 1;
-  while (start < lines.length && (!lines[start].trim() || /^%%/.test(lines[start].trim()))) start++;
-  if (start >= lines.length) return depthByKey;
-
-  const rootIndent = (lines[start].match(/^\s*/)?.[0].length ?? 0);
-
-  type StackItem = { depth: number; section: number; label: string };
-  const stack: StackItem[] = [];
-  let currentSection = -1;
-
-  for (let j = start; j < lines.length; j++) {
-    const rawLine = lines[j];
-    const trimmed = rawLine.trim();
-    if (!trimmed || /^%%/.test(trimmed)) continue;            // skip blanks and comments
-    if (trimmed === '---') continue;                          // ignore stray front-matter separators inside block
-
-    const indent = (rawLine.match(/^\s*/)?.[0].length ?? 0);
-    const rel = Math.max(0, indent - rootIndent);
-    const depth = Math.floor(rel / 2); // assumes 2 spaces per level
-
-    const label = extractLabelFromSource(rawLine);
-
-    // First parsed line is the root (skip tagging it)
-    if (j === start) {
-      stack[0] = { depth: 0, section: -1, label };
-      continue;
-    }
-
-    // Maintain ancestor stack up to this depth
-    if (stack.length > depth) stack.length = depth;
-
-    // Determine section: depth 1 defines a new section in source order
-    let section: number;
-    if (depth === 1) {
-      currentSection += 1;
-      section = currentSection;
-    } else {
-      section = stack[depth - 1]?.section ?? currentSection;
-    }
-
-    stack[depth] = { depth, section, label };
-
-    const key = `${section}-${normalizeLabel(label)}`;
-    depthByKey.set(key, depth);
-  }
-
-  return depthByKey;
-}
-
-// 2) Tag rendered SVG nodes based on parsed depths keyed by `{section}-{label}`
-function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
+// Tag rendered SVG nodes with `mm-depth-*` classes using existing `data-depth` attributes
+function tagMindmapNodesByDepth(container: HTMLElement) {
   const svg = container.querySelector('svg');
   if (!svg) return;
 
@@ -141,62 +83,25 @@ function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
   const rootIdx = nodeEls.findIndex(g => g.classList.contains('section-root'));
   const nodes = nodeEls.filter((_, idx) => idx !== rootIdx);
 
-  const depthByKey = parseMindmapDepths(raw);
-
   const clean = (elm: SVGGElement) => {
     Array.from(elm.classList)
       .filter(c => /^mm-(depth|branch)-\d+$/.test(c))
       .forEach(c => elm.classList.remove(c));
-    delete (elm as any).dataset.depth;
     delete (elm as any).dataset.branch;
   };
 
   nodes.forEach((node) => {
-    // Mermaid encodes section ids as one class per digit (e.g. section-1 section-0 for 10).
-    // Collect all numeric "section-*" tokens and join them so that multi-digit
-    // sections are parsed correctly.
-    const secParts = Array.from(node.classList)
-      .map(c => c.match(/^section-(\d+)$/)?.[1])
-      .filter(Boolean) as string[];
-    if (secParts.length === 0) return;
-    const section = parseInt(secParts.join(''), 10);
-
-    // Extract the visible label text from the node
-    let label = '';
-    const textEl = node.querySelector('text');
-    if (textEl) {
-      const allTspans = Array.from(textEl.querySelectorAll('tspan'));
-      // Prefer LEAF tspans (those without nested tspans) to avoid duplicates
-      let leafTspans = allTspans.filter(ts => !ts.querySelector('tspan')) as SVGTSpanElement[];
-      if (leafTspans.length === 0) {
-        // Fallback: use direct child tspans of <text>
-        leafTspans = Array.from(textEl.children).filter(
-          (el): el is SVGTSpanElement => el.tagName.toLowerCase() === 'tspan'
-        );
-      }
-      if (leafTspans.length > 0) {
-        label = leafTspans
-          .map(ts => (ts.textContent ?? '').trim())
-          .filter(s => s.length > 0)
-          .join(' ');
-      } else {
-        // Last resort: take the textContent of the <text> node
-        label = (textEl.textContent ?? '').trim();
-      }
-    }
-    label = normalizeLabel(label);
-
-    const key = `${section}-${label}`;
-    const depth = depthByKey.get(key);
-
+    const depthAttr = (node as any).dataset?.depth;
     clean(node);
-    if (depth != null) {
-      node.classList.add(`mm-depth-${depth}`);
-      (node as any).dataset.depth = String(depth);
+    if (depthAttr != null) {
+      const depth = parseInt(depthAttr, 10);
+      if (!Number.isNaN(depth)) {
+        node.classList.add(`mm-depth-${depth}`);
+        (node as any).dataset.depth = String(depth);
+      }
     }
   });
 }
-
 
 // --- ELK helpers for mindmap tree tagging ---
 type MMItem = { key: string; label: string; section: number; depth: number; parentKey: string | null };
