@@ -152,7 +152,7 @@ function parseMindmapTree(raw: string): MMItem[] {
     }
 
     const parentKey = depth === 0 ? null : stack[depth - 1]?.key ?? `root-${normalizeLabel(items[0]?.label ?? '')}`;
-    const key = `${section}-${normalizeLabel(label)}`;
+    const key = `${depth}-${normalizeLabel(label)}`;
 
     items.push({ key, label: normalizeLabel(label), section, depth, parentKey: parentKey ?? null });
     stack[depth] = { depth, section, key };
@@ -199,12 +199,9 @@ function tagMindmapTree(container: HTMLElement, raw: string) {
   const allNodeGroups = Array.from(svg.querySelectorAll<SVGGElement>('g.mindmap-node'));
   const nodes = allNodeGroups.filter(g => !g.classList.contains('section-root'));
   nodes.forEach((node) => {
-    const secParts = Array.from(node.classList)
-      .map(c => c.match(/^section-(\d+)$/)?.[1])
-      .filter(Boolean) as string[];
-    const section = secParts.length ? parseInt(secParts.join(''), 10) : 0;
+    const depth = node.dataset.depth;
     const label = labelFromNode(node);
-    const key = `${section}-${label}`;
+    const key = `${depth}-${label}`;
     const item = itemByKey.get(key);
     if (!item) return;
     (node as any).dataset.mmId = key;
