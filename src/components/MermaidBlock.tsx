@@ -137,7 +137,7 @@ function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
   const svg = container.querySelector('svg');
   if (!svg) return;
 
-  const nodeEls = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
+  const nodeEls = Array.from(svg.querySelectorAll<SVGGElement>('g.mindmap-node'));
   const rootIdx = nodeEls.findIndex(g => g.classList.contains('section-root'));
   const nodes = nodeEls.filter((_, idx) => idx !== rootIdx);
 
@@ -277,7 +277,7 @@ function tagMindmapTree(container: HTMLElement, raw: string) {
   };
 
   // Tag root first
-  const rootGroup = svg.querySelector<SVGGElement>('.mindmap-nodes > g.mindmap-node.section-root');
+  const rootGroup = svg.querySelector<SVGGElement>('g.mindmap-node.section-root');
   if (rootGroup) {
     const rootLabel = labelFromNode(rootGroup);
     const rootKey = `root-${rootLabel}`;
@@ -287,7 +287,7 @@ function tagMindmapTree(container: HTMLElement, raw: string) {
   }
 
   // Tag non-root nodes
-  const allNodeGroups = Array.from(svg.querySelectorAll<SVGGElement>('.mindmap-nodes > g.mindmap-node'));
+  const allNodeGroups = Array.from(svg.querySelectorAll<SVGGElement>('g.mindmap-node'));
   const nodes = allNodeGroups.filter(g => !g.classList.contains('section-root'));
   const sectionRe = /^section-(\d+)$/;
 
