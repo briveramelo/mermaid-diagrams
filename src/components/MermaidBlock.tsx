@@ -152,10 +152,14 @@ function tagMindmapNodesByDepth(container: HTMLElement, raw: string) {
   };
 
   nodes.forEach((node) => {
-    const cls = node.getAttribute('class') || '';
-    const secMatch = cls.match(/section-(\d+)/);
-    if (!secMatch) return;
-    const section = parseInt(secMatch[1], 10);
+    // Mermaid encodes section ids as one class per digit (e.g. section-1 section-0 for 10).
+    // Collect all numeric "section-*" tokens and join them so that multi-digit
+    // sections are parsed correctly.
+    const secParts = Array.from(node.classList)
+      .map(c => c.match(/^section-(\d+)$/)?.[1])
+      .filter(Boolean) as string[];
+    if (secParts.length === 0) return;
+    const section = parseInt(secParts.join(''), 10);
 
     // Extract the visible label text from the node
     let label = '';
@@ -289,11 +293,11 @@ function tagMindmapTree(container: HTMLElement, raw: string) {
   // Tag non-root nodes
   const allNodeGroups = Array.from(svg.querySelectorAll<SVGGElement>('g.mindmap-node'));
   const nodes = allNodeGroups.filter(g => !g.classList.contains('section-root'));
-  const sectionRe = /^section-(\d+)$/;
-
   nodes.forEach((node) => {
-    const secClass = Array.from(node.classList).find(c => sectionRe.test(c));
-    const section = secClass ? parseInt(secClass.match(sectionRe)![1], 10) : 0;
+    const secParts = Array.from(node.classList)
+      .map(c => c.match(/^section-(\d+)$/)?.[1])
+      .filter(Boolean) as string[];
+    const section = secParts.length ? parseInt(secParts.join(''), 10) : 0;
     const label = labelFromNode(node);
     const key = `${section}-${label}`;
     const item = itemByKey.get(key);
