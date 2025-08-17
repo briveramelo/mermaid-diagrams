@@ -24,6 +24,9 @@ mindmap
         Catalog Explorer
         Three-Level Namespace
         ABAC Policies
+        Tags
+        Tag Policies
+        Data Classification
     📥 Ingestion
       Lakeflow Connect
         Managed Connectors
@@ -31,6 +34,8 @@ mindmap
           SQL Server Connector
           ServiceNow Connector
           Google Analytics 4 Connector
+          Workday Connector
+          SharePoint Connector
         Standard Connectors
           JDBC Connector
           Kafka Connector
@@ -47,11 +52,27 @@ mindmap
       Delta Lake
         Parquet Format
         Delta Log
+        Change Data Feed
+        Time Travel
+        Optimize
+        Z-Order
+        Vacuum
+        ACID Transactions
       Tables
       Views
       Streaming Tables
       Materialized Views
       Volumes
+      External Locations
+      Storage Credentials
+    ⚙️ Compute
+      All-Purpose Compute
+      Job Compute
+      Serverless Compute
+      Compute Policies
+      Pools
+      Autoscaling
+      Photon
     🛠 DevOps
       Databricks Workspace
       Notebooks
@@ -68,11 +89,14 @@ mindmap
         SDKs
         CLI
       Asset Bundles
+      Apps
+      Partner Connect
     🔄 Transformation
       Lakeflow Declarative Pipelines
       Spark SQL
       Structured Streaming
       Expectations
+      Dynamic Tables
     ⏱ Orchestration
       Lakeflow Jobs
         Job Triggers
@@ -81,20 +105,23 @@ mindmap
           Continuous Trigger
         Job Parameters
         Job Notifications
-        System Tables
+        Run As
+        Retries
     🔍 Querying
       Databricks SQL
       SQL Warehouses
         Serverless Warehouse
         Pro Warehouse
         Classic Warehouse
-      Photon Engine
+      Lakehouse Federation
+        Query Federation
+        Catalog Federation
     🧠 ML & AI
       MLflow
         Experiment Tracking
         Model Registry
         Feature Store
-          Online Tables
+          Online Store
       Mosaic AI
         Agent Framework
         Vector Search
@@ -112,10 +139,14 @@ mindmap
       Delta Sharing
       Clean Rooms
       Databricks Marketplace
-    🔒 Security & Observability
+    🔒 Security
       Audit Logs
       Network Policies
       Private Connectivity
       Encryption
       IP Access Lists
+      Secrets
+      System Tables
+      Lakehouse Monitoring
+      Inference Tables
 ```

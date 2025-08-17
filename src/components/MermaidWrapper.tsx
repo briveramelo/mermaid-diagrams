@@ -15,16 +15,21 @@ export default function MermaidWrapper({rawMermaidFileText, onDrawIoXml}: Mermai
   const wrapperRef = useRef<ReactZoomPanPinchRef | null>(null);
   const [scale, setScale] = useState(1);
   const colors = [
-    "#60a5fa",
-    "#22c55e",
-    "#f59e0b",
-    "#10b981",
-    "#a78bfa",
-    "#2dd4bf",
-    "#6366f1",
-    "#ec4899",
-    "#fbbf24",
-    "#94a3b8",
+    "#ef4444", // red
+    "#38bdf8", // sky
+    "#f97316", // orange
+    "#6d28d9", // ultraviolet
+    "#10b981", // emerald
+    "#eab308", // yellow
+    "#ec4899", // pink
+    "#84cc16", // lime
+    "#2563eb", // blue
+    "#14b8a6", // teal
+    "#c026d3", // magenta
+    "#06b6d4", // cyan
+    "#7c3aed", // violet
+    "#4f46e5", // indigo
+    "#d946ef", // fuchsia
   ];
   const [layerCount, setLayerCount] = useState(0);
 
